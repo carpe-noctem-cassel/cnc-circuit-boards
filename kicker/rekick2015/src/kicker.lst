@@ -1,0 +1,689 @@
+   1               		.file	"kicker.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 108               	.global	kicker_init
+ 110               	kicker_init:
+   1:kicker.c      **** /*
+   2:kicker.c      ****  * kicker.c
+   3:kicker.c      ****  *
+   4:kicker.c      ****  *  Created on: Sep 19, 2016
+   5:kicker.c      ****  *      Author: Carpe Noctem
+   6:kicker.c      ****  */
+   7:kicker.c      **** 
+   8:kicker.c      **** #include "defaults.h"
+   9:kicker.c      **** #include "global.h"
+  10:kicker.c      **** #include "kicker.h"
+  11:kicker.c      **** #include "timer.h"
+  12:kicker.c      **** 
+  13:kicker.c      **** #include <avr/interrupt.h>
+  14:kicker.c      **** #include <util/delay.h>
+  15:kicker.c      **** 
+  16:kicker.c      **** 
+  17:kicker.c      **** struct KICK_STRUCT {
+  18:kicker.c      **** 	uint32_t timestamp;
+  19:kicker.c      **** 	uint32_t last_kick;
+  20:kicker.c      **** 	uint16_t  release_time;
+  21:kicker.c      **** 	uint8_t  at_voltage;
+  22:kicker.c      **** } kick_job = {0, 0, 0, 0};
+  23:kicker.c      **** 
+  24:kicker.c      **** 
+  25:kicker.c      **** void kicker_init(void)
+  26:kicker.c      **** {
+ 112               	.LM0:
+ 113               	.LFBB1:
+ 114               	/* prologue: function */
+ 115               	/* frame size = 0 */
+ 116               	/* stack size = 0 */
+ 117               	.L__stack_usage = 0
+  27:kicker.c      **** 	SET_OUTPUT(KICK);
+ 119               	.LM1:
+ 120 0000 239A      		sbi 0x4,3
+  28:kicker.c      **** 	RESET(KICK);
+ 122               	.LM2:
+ 123 0002 2B98      		cbi 0x5,3
+ 124 0004 0895      		ret
+ 126               	.Lscope1:
+ 129               	.global	kicker_addKickJob
+ 131               	kicker_addKickJob:
+  29:kicker.c      **** }
+  30:kicker.c      **** 
+  31:kicker.c      **** // save the message
+  32:kicker.c      **** // the kick is done by kicker_task_handler
+  33:kicker.c      **** void kicker_addKickJob(uint16_t us10)
+  34:kicker.c      **** {
+ 133               	.LM3:
+ 134               	.LFBB2:
+ 135 0006 CF93      		push r28
+ 136 0008 DF93      		push r29
+ 137               	/* prologue: function */
+ 138               	/* frame size = 0 */
+ 139               	/* stack size = 2 */
+ 140               	.L__stack_usage = 2
+ 141 000a EC01      		movw r28,r24
+  35:kicker.c      **** 	timer_get_ms(&kick_job.timestamp);
+ 143               	.LM4:
+ 144 000c 80E0      		ldi r24,lo8(kick_job)
+ 145 000e 90E0      		ldi r25,hi8(kick_job)
+ 146 0010 0E94 0000 		call timer_get_ms
+  36:kicker.c      **** 	kick_job.release_time = us10;
+ 148               	.LM5:
+ 149 0014 D093 0000 		sts kick_job+8+1,r29
+ 150 0018 C093 0000 		sts kick_job+8,r28
+ 151               	/* epilogue start */
+  37:kicker.c      **** 
+  38:kicker.c      **** 	return;
+  39:kicker.c      **** }
+ 153               	.LM6:
+ 154 001c DF91      		pop r29
+ 155 001e CF91      		pop r28
+ 156 0020 0895      		ret
+ 158               	.Lscope2:
+ 159               		.section	.rodata.str1.1,"aMS",@progbits,1
+ 160               	.LC0:
+ 161 0000 4361 6E6E 		.string	"Cannot reach this voltage"
+ 161      6F74 2072 
+ 161      6561 6368 
+ 161      2074 6869 
+ 161      7320 766F 
+ 162               		.text
+ 166               	.global	kicker_addKickJobForced
+ 168               	kicker_addKickJobForced:
+  40:kicker.c      **** 
+  41:kicker.c      **** // save the message
+  42:kicker.c      **** // the kick is done by kicker_task_handler
+  43:kicker.c      **** void kicker_addKickJobForced(uint16_t us10, uint8_t forceVoltage)
+  44:kicker.c      **** {
+ 170               	.LM7:
+ 171               	.LFBB3:
+ 172 0022 0F93      		push r16
+ 173 0024 1F93      		push r17
+ 174 0026 CF93      		push r28
+ 175               	/* prologue: function */
+ 176               	/* frame size = 0 */
+ 177               	/* stack size = 3 */
+ 178               	.L__stack_usage = 3
+ 179 0028 8C01      		movw r16,r24
+ 180 002a C62F      		mov r28,r22
+  45:kicker.c      **** 	uint16_t voltage = booster_getCapacitorVoltage();
+ 182               	.LM8:
+ 183 002c 0E94 0000 		call booster_getCapacitorVoltage
+  46:kicker.c      **** 
+  47:kicker.c      **** 	if (forceVoltage > voltage + FORCED_VOLTAGE_RANGE/2 || forceVoltage < voltage - FORCED_VOLTAGE_RAN
+ 185               	.LM9:
+ 186 0030 4C2F      		mov r20,r28
+ 187 0032 50E0      		ldi r21,0
+ 188 0034 9C01      		movw r18,r24
+ 189 0036 2B5F      		subi r18,-5
+ 190 0038 3F4F      		sbci r19,-1
+ 191 003a 2417      		cp r18,r20
+ 192 003c 3507      		cpc r19,r21
+ 193 003e 00F0      		brlo .L4
+ 195               	.LM10:
+ 196 0040 2A50      		subi r18,10
+ 197 0042 3109      		sbc r19,__zero_reg__
+ 198 0044 4217      		cp r20,r18
+ 199 0046 5307      		cpc r21,r19
+ 200 0048 00F4      		brsh .L5
+ 201               	.L4:
+ 202               	.LBB2:
+  48:kicker.c      **** 		warning("Cannot reach this voltage");
+ 204               	.LM11:
+ 205 004a 80E0      		ldi r24,lo8(.LC0)
+ 206 004c 90E0      		ldi r25,hi8(.LC0)
+ 207               	/* epilogue start */
+ 208               	.LBE2:
+  49:kicker.c      **** 		return;
+  50:kicker.c      **** 	}
+  51:kicker.c      **** 
+  52:kicker.c      **** 	timer_get_ms(&kick_job.timestamp);
+  53:kicker.c      **** 	kick_job.release_time = us10;
+  54:kicker.c      **** 	kick_job.at_voltage = forceVoltage;
+  55:kicker.c      **** 
+  56:kicker.c      **** 	return;
+  57:kicker.c      **** }
+ 210               	.LM12:
+ 211 004e CF91      		pop r28
+ 212 0050 1F91      		pop r17
+ 213 0052 0F91      		pop r16
+ 214               	.LBB3:
+  48:kicker.c      **** 		warning("Cannot reach this voltage");
+ 216               	.LM13:
+ 217 0054 0C94 0000 		jmp warning
+ 218               	.L5:
+ 219               	.LBE3:
+  52:kicker.c      **** 	kick_job.release_time = us10;
+ 221               	.LM14:
+ 222 0058 80E0      		ldi r24,lo8(kick_job)
+ 223 005a 90E0      		ldi r25,hi8(kick_job)
+ 224 005c 0E94 0000 		call timer_get_ms
+  53:kicker.c      **** 	kick_job.at_voltage = forceVoltage;
+ 226               	.LM15:
+ 227 0060 1093 0000 		sts kick_job+8+1,r17
+ 228 0064 0093 0000 		sts kick_job+8,r16
+  54:kicker.c      **** 
+ 230               	.LM16:
+ 231 0068 C093 0000 		sts kick_job+10,r28
+ 232               	/* epilogue start */
+ 234               	.LM17:
+ 235 006c CF91      		pop r28
+ 236 006e 1F91      		pop r17
+ 237 0070 0F91      		pop r16
+ 238 0072 0895      		ret
+ 240               	.Lscope3:
+ 241               		.section	.rodata.str1.1
+ 242               	.LC1:
+ 243 001a 4B69 636B 		.string	"Kicktime to long! Set to %dms"
+ 243      7469 6D65 
+ 243      2074 6F20 
+ 243      6C6F 6E67 
+ 243      2120 5365 
+ 244               	.global	__floatunsisf
+ 245               	.global	__divsf3
+ 246               	.global	__fixunssfsi
+ 247               		.text
+ 250               	.global	kicker_kick
+ 252               	kicker_kick:
+  58:kicker.c      **** 
+  59:kicker.c      **** void kicker_kick(uint16_t us10) {
+ 254               	.LM18:
+ 255               	.LFBB4:
+ 256 0074 0F93      		push r16
+ 257 0076 1F93      		push r17
+ 258 0078 CF93      		push r28
+ 259 007a DF93      		push r29
+ 260 007c CDB7      		in r28,__SP_L__
+ 261 007e DEB7      		in r29,__SP_H__
+ 262 0080 6E97      		sbiw r28,30
+ 263 0082 0FB6      		in __tmp_reg__,__SREG__
+ 264 0084 F894      		cli
+ 265 0086 DEBF      		out __SP_H__,r29
+ 266 0088 0FBE      		out __SREG__,__tmp_reg__
+ 267 008a CDBF      		out __SP_L__,r28
+ 268               	/* prologue: function */
+ 269               	/* frame size = 30 */
+ 270               	/* stack size = 34 */
+ 271               	.L__stack_usage = 34
+ 272 008c 8C01      		movw r16,r24
+  60:kicker.c      **** 	booster_deactivate();
+ 274               	.LM19:
+ 275 008e 0E94 0000 		call booster_deactivate
+  61:kicker.c      **** 
+  62:kicker.c      **** 	if(us10 > (MAX_KICK_TIME * 100)) {
+ 277               	.LM20:
+ 278 0092 0938      		cpi r16,-119
+ 279 0094 83E1      		ldi r24,19
+ 280 0096 1807      		cpc r17,r24
+ 281 0098 00F0      		brlo .L8
+ 282               	.LBB4:
+  63:kicker.c      **** 		us10 = MAX_KICK_TIME * 100;
+  64:kicker.c      **** 		char message[30];
+  65:kicker.c      **** 		sprintf(message, "Kicktime to long! Set to %dms", MAX_KICK_TIME);
+ 284               	.LM21:
+ 285 009a 1F92      		push __zero_reg__
+ 286 009c 82E3      		ldi r24,lo8(50)
+ 287 009e 8F93      		push r24
+ 288 00a0 80E0      		ldi r24,lo8(.LC1)
+ 289 00a2 90E0      		ldi r25,hi8(.LC1)
+ 290 00a4 9F93      		push r25
+ 291 00a6 8F93      		push r24
+ 292 00a8 8E01      		movw r16,r28
+ 293 00aa 0F5F      		subi r16,-1
+ 294 00ac 1F4F      		sbci r17,-1
+ 295 00ae 1F93      		push r17
+ 296 00b0 0F93      		push r16
+ 297 00b2 0E94 0000 		call sprintf
+  66:kicker.c      **** 		error(message);
+ 299               	.LM22:
+ 300 00b6 C801      		movw r24,r16
+ 301 00b8 0E94 0000 		call error
+ 302 00bc 0F90      		pop __tmp_reg__
+ 303 00be 0F90      		pop __tmp_reg__
+ 304 00c0 0F90      		pop __tmp_reg__
+ 305 00c2 0F90      		pop __tmp_reg__
+ 306 00c4 0F90      		pop __tmp_reg__
+ 307 00c6 0F90      		pop __tmp_reg__
+  63:kicker.c      **** 		us10 = MAX_KICK_TIME * 100;
+ 309               	.LM23:
+ 310 00c8 08E8      		ldi r16,lo8(-120)
+ 311 00ca 13E1      		ldi r17,lo8(19)
+ 312               	.L8:
+ 313               	.LBE4:
+  67:kicker.c      **** 	}
+  68:kicker.c      **** 
+  69:kicker.c      **** 	uint16_t us16 = us10 / 1.6;
+  70:kicker.c      **** 	cli();
+ 315               	.LM24:
+ 316               	/* #APP */
+ 317               	 ;  70 "kicker.c" 1
+ 318 00cc F894      		cli
+ 319               	 ;  0 "" 2
+  69:kicker.c      **** 	cli();
+ 321               	.LM25:
+ 322               	/* #NOAPP */
+ 323 00ce B801      		movw r22,r16
+ 324 00d0 80E0      		ldi r24,0
+ 325 00d2 90E0      		ldi r25,0
+ 326 00d4 0E94 0000 		call __floatunsisf
+ 327 00d8 2DEC      		ldi r18,lo8(-51)
+ 328 00da 3CEC      		ldi r19,lo8(-52)
+ 329 00dc 4CEC      		ldi r20,lo8(-52)
+ 330 00de 5FE3      		ldi r21,lo8(63)
+ 331 00e0 0E94 0000 		call __divsf3
+ 332 00e4 0E94 0000 		call __fixunssfsi
+  71:kicker.c      **** 	kicker_ticks = us16;
+ 334               	.LM26:
+ 335 00e8 7093 0000 		sts kicker_ticks+1,r23
+ 336 00ec 6093 0000 		sts kicker_ticks,r22
+  72:kicker.c      **** 	sei();
+ 338               	.LM27:
+ 339               	/* #APP */
+ 340               	 ;  72 "kicker.c" 1
+ 341 00f0 7894      		sei
+ 342               	 ;  0 "" 2
+  73:kicker.c      **** 
+  74:kicker.c      **** 	SET(KICK);
+ 344               	.LM28:
+ 345               	/* #NOAPP */
+ 346 00f2 2B9A      		sbi 0x5,3
+ 347               	.L9:
+  75:kicker.c      **** 	while(kicker_ticks > 0);
+ 349               	.LM29:
+ 350 00f4 8091 0000 		lds r24,kicker_ticks
+ 351 00f8 9091 0000 		lds r25,kicker_ticks+1
+ 352 00fc 1816      		cp __zero_reg__,r24
+ 353 00fe 1906      		cpc __zero_reg__,r25
+ 354 0100 04F0      		brlt .L9
+  76:kicker.c      **** 	RESET(KICK);
+ 356               	.LM30:
+ 357 0102 2B98      		cbi 0x5,3
+  77:kicker.c      **** 
+  78:kicker.c      **** 	booster_activate();
+ 359               	.LM31:
+ 360 0104 0E94 0000 		call booster_activate
+ 361               	/* epilogue start */
+  79:kicker.c      **** }
+ 363               	.LM32:
+ 364 0108 6E96      		adiw r28,30
+ 365 010a 0FB6      		in __tmp_reg__,__SREG__
+ 366 010c F894      		cli
+ 367 010e DEBF      		out __SP_H__,r29
+ 368 0110 0FBE      		out __SREG__,__tmp_reg__
+ 369 0112 CDBF      		out __SP_L__,r28
+ 370 0114 DF91      		pop r29
+ 371 0116 CF91      		pop r28
+ 372 0118 1F91      		pop r17
+ 373 011a 0F91      		pop r16
+ 374 011c 0895      		ret
+ 379               	.Lscope4:
+ 380               		.section	.rodata.str1.1
+ 381               	.LC2:
+ 382 0038 4B69 636B 		.string	"Kick job expired."
+ 382      206A 6F62 
+ 382      2065 7870 
+ 382      6972 6564 
+ 382      2E00 
+ 383               	.LC3:
+ 384 004a 4361 6E20 		.string	"Can not kick. Booster is in invalid state."
+ 384      6E6F 7420 
+ 384      6B69 636B 
+ 384      2E20 426F 
+ 384      6F73 7465 
+ 385               	.LC4:
+ 386 0075 4B69 636B 		.string	"Kickdelay: %lu ms"
+ 386      6465 6C61 
+ 386      793A 2025 
+ 386      6C75 206D 
+ 386      7300 
+ 387               	.LC5:
+ 388 0087 4B69 636B 		.string	"Kicktime: %lu ms"
+ 388      7469 6D65 
+ 388      3A20 256C 
+ 388      7520 6D73 
+ 388      00
+ 389               		.text
+ 391               	.global	kicker_ctrl
+ 393               	kicker_ctrl:
+  80:kicker.c      **** 
+  81:kicker.c      **** // handle the kick job
+  82:kicker.c      **** // _not_ thread safe
+  83:kicker.c      **** void kicker_ctrl(void) {
+ 395               	.LM33:
+ 396               	.LFBB5:
+ 397 011e 8F92      		push r8
+ 398 0120 9F92      		push r9
+ 399 0122 AF92      		push r10
+ 400 0124 BF92      		push r11
+ 401 0126 CF92      		push r12
+ 402 0128 DF92      		push r13
+ 403 012a EF92      		push r14
+ 404 012c FF92      		push r15
+ 405 012e 0F93      		push r16
+ 406 0130 1F93      		push r17
+ 407 0132 CF93      		push r28
+ 408 0134 DF93      		push r29
+ 409 0136 CDB7      		in r28,__SP_L__
+ 410 0138 DEB7      		in r29,__SP_H__
+ 411 013a A297      		sbiw r28,34
+ 412 013c 0FB6      		in __tmp_reg__,__SREG__
+ 413 013e F894      		cli
+ 414 0140 DEBF      		out __SP_H__,r29
+ 415 0142 0FBE      		out __SREG__,__tmp_reg__
+ 416 0144 CDBF      		out __SP_L__,r28
+ 417               	/* prologue: function */
+ 418               	/* frame size = 34 */
+ 419               	/* stack size = 46 */
+ 420               	.L__stack_usage = 46
+  84:kicker.c      **** 	uint8_t sreg;
+  85:kicker.c      **** 	uint32_t time_now;
+  86:kicker.c      **** 	timer_get_ms(&time_now);
+ 422               	.LM34:
+ 423 0146 CE01      		movw r24,r28
+ 424 0148 4F96      		adiw r24,31
+ 425 014a 0E94 0000 		call timer_get_ms
+  87:kicker.c      **** 
+  88:kicker.c      **** 	// check for a job: no job to do if timestamp is 0
+  89:kicker.c      **** 	if (kick_job.timestamp == 0)
+ 427               	.LM35:
+ 428 014e 4091 0000 		lds r20,kick_job
+ 429 0152 5091 0000 		lds r21,kick_job+1
+ 430 0156 6091 0000 		lds r22,kick_job+2
+ 431 015a 7091 0000 		lds r23,kick_job+3
+ 432 015e 4115      		cp r20,__zero_reg__
+ 433 0160 5105      		cpc r21,__zero_reg__
+ 434 0162 6105      		cpc r22,__zero_reg__
+ 435 0164 7105      		cpc r23,__zero_reg__
+ 436 0166 01F4      		brne .+2
+ 437 0168 00C0      		rjmp .L11
+  90:kicker.c      **** 		return;
+  91:kicker.c      **** 
+  92:kicker.c      **** 	// check time between shots
+  93:kicker.c      **** 	if (time_now - kick_job.last_kick < TIME_BETWEEN_TWO_SHOTS) {
+ 439               	.LM36:
+ 440 016a 8F8D      		ldd r24,Y+31
+ 441 016c 98A1      		ldd r25,Y+32
+ 442 016e A9A1      		ldd r26,Y+33
+ 443 0170 BAA1      		ldd r27,Y+34
+ 444 0172 0091 0000 		lds r16,kick_job+4
+ 445 0176 1091 0000 		lds r17,kick_job+4+1
+ 446 017a 2091 0000 		lds r18,kick_job+4+2
+ 447 017e 3091 0000 		lds r19,kick_job+4+3
+ 448 0182 6C01      		movw r12,r24
+ 449 0184 7D01      		movw r14,r26
+ 450 0186 C01A      		sub r12,r16
+ 451 0188 D10A      		sbc r13,r17
+ 452 018a E20A      		sbc r14,r18
+ 453 018c F30A      		sbc r15,r19
+ 454 018e 9701      		movw r18,r14
+ 455 0190 8601      		movw r16,r12
+ 456 0192 083C      		cpi r16,-56
+ 457 0194 1105      		cpc r17,__zero_reg__
+ 458 0196 2105      		cpc r18,__zero_reg__
+ 459 0198 3105      		cpc r19,__zero_reg__
+ 460 019a 00F0      		brlo .L23
+  94:kicker.c      **** 		// invalidate data
+  95:kicker.c      **** 		kick_job.timestamp = 0;
+  96:kicker.c      **** 		return;
+  97:kicker.c      **** 	}
+  98:kicker.c      **** 
+  99:kicker.c      **** 	// check for timeout: the job expires after 2 seconds
+ 100:kicker.c      **** 	if (time_now - kick_job.timestamp > KICK_TASK_EXPIRE) {
+ 462               	.LM37:
+ 463 019c 841B      		sub r24,r20
+ 464 019e 950B      		sbc r25,r21
+ 465 01a0 A60B      		sbc r26,r22
+ 466 01a2 B70B      		sbc r27,r23
+ 467 01a4 813D      		cpi r24,-47
+ 468 01a6 9740      		sbci r25,7
+ 469 01a8 A105      		cpc r26,__zero_reg__
+ 470 01aa B105      		cpc r27,__zero_reg__
+ 471 01ac 00F0      		brlo .L15
+ 472               	.LBB5:
+ 101:kicker.c      **** 		warning("Kick job expired.");
+ 474               	.LM38:
+ 475 01ae 80E0      		ldi r24,lo8(.LC2)
+ 476 01b0 90E0      		ldi r25,hi8(.LC2)
+ 477 01b2 0E94 0000 		call warning
+ 478               	.L23:
+ 102:kicker.c      **** 		kick_job.timestamp = 0;
+ 480               	.LM39:
+ 481 01b6 1092 0000 		sts kick_job,__zero_reg__
+ 482 01ba 1092 0000 		sts kick_job+1,__zero_reg__
+ 483 01be 1092 0000 		sts kick_job+2,__zero_reg__
+ 484 01c2 1092 0000 		sts kick_job+3,__zero_reg__
+ 103:kicker.c      **** 		return;
+ 486               	.LM40:
+ 487 01c6 00C0      		rjmp .L11
+ 488               	.L15:
+ 489               	.LBE5:
+ 104:kicker.c      **** 	}
+ 105:kicker.c      **** 
+ 106:kicker.c      **** 	// handle forced_voltage
+ 107:kicker.c      **** 	if (kick_job.at_voltage > 0) {
+ 491               	.LM41:
+ 492 01c8 1091 0000 		lds r17,kick_job+10
+ 493 01cc 1123      		tst r17
+ 494 01ce 01F0      		breq .L16
+ 495               	.LBB6:
+ 108:kicker.c      **** 		int16_t delta = ((int16_t) kick_job.at_voltage) - ((int16_t) booster_getCapacitorVoltage());
+ 497               	.LM42:
+ 498 01d0 0E94 0000 		call booster_getCapacitorVoltage
+ 499 01d4 212F      		mov r18,r17
+ 500 01d6 30E0      		ldi r19,0
+ 501               	.LBB7:
+ 109:kicker.c      **** 		if (abs(delta) > FORCED_VOLTAGE_RANGE/2)
+ 503               	.LM43:
+ 504 01d8 A901      		movw r20,r18
+ 505 01da 481B      		sub r20,r24
+ 506 01dc 590B      		sbc r21,r25
+ 507 01de CA01      		movw r24,r20
+ 508 01e0 57FF      		sbrs r21,7
+ 509 01e2 00C0      		rjmp .L18
+ 510 01e4 9195      		neg r25
+ 511 01e6 8195      		neg r24
+ 512 01e8 9109      		sbc r25,__zero_reg__
+ 513               	.L18:
+ 514 01ea 0697      		sbiw r24,6
+ 515 01ec 04F0      		brlt .+2
+ 516 01ee 00C0      		rjmp .L11
+ 517               	.LBE7:
+ 110:kicker.c      **** 			return;
+ 111:kicker.c      **** 		kick_job.at_voltage = 0;
+ 519               	.LM44:
+ 520 01f0 1092 0000 		sts kick_job+10,__zero_reg__
+ 521               	.L16:
+ 522               	.LBE6:
+ 523               	.LBB8:
+ 112:kicker.c      **** 	}
+ 113:kicker.c      **** 
+ 114:kicker.c      **** 	// check if the booster is enabled
+ 115:kicker.c      **** 	if (!booster_canKick()) {
+ 525               	.LM45:
+ 526 01f4 0E94 0000 		call booster_canKick
+ 527 01f8 892B      		or r24,r25
+ 528 01fa 01F4      		brne .L19
+ 529               	.LBB9:
+ 116:kicker.c      **** 		debug("Can not kick. Booster is in invalid state.");
+ 531               	.LM46:
+ 532 01fc 80E0      		ldi r24,lo8(.LC3)
+ 533 01fe 90E0      		ldi r25,hi8(.LC3)
+ 534 0200 0E94 0000 		call debug
+ 117:kicker.c      **** 		return;
+ 536               	.LM47:
+ 537 0204 00C0      		rjmp .L11
+ 538               	.L19:
+ 539               	.LBE9:
+ 540               	.LBE8:
+ 118:kicker.c      **** 	}
+ 119:kicker.c      **** 
+ 120:kicker.c      **** 	timer_get_ms(&time_now);
+ 542               	.LM48:
+ 543 0206 CE01      		movw r24,r28
+ 544 0208 4F96      		adiw r24,31
+ 545 020a 0E94 0000 		call timer_get_ms
+ 121:kicker.c      **** 	uint32_t kickdelay = time_now - kick_job.timestamp;
+ 547               	.LM49:
+ 548 020e CF8C      		ldd r12,Y+31
+ 549 0210 D8A0      		ldd r13,Y+32
+ 550 0212 E9A0      		ldd r14,Y+33
+ 551 0214 FAA0      		ldd r15,Y+34
+ 552 0216 8091 0000 		lds r24,kick_job
+ 553 021a 9091 0000 		lds r25,kick_job+1
+ 554 021e A091 0000 		lds r26,kick_job+2
+ 555 0222 B091 0000 		lds r27,kick_job+3
+ 556 0226 C81A      		sub r12,r24
+ 557 0228 D90A      		sbc r13,r25
+ 558 022a EA0A      		sbc r14,r26
+ 559 022c FB0A      		sbc r15,r27
+ 122:kicker.c      **** 
+ 123:kicker.c      **** 	kicker_kick(kick_job.release_time);
+ 561               	.LM50:
+ 562 022e 8091 0000 		lds r24,kick_job+8
+ 563 0232 9091 0000 		lds r25,kick_job+8+1
+ 564 0236 0E94 0000 		call kicker_kick
+ 124:kicker.c      **** 
+ 125:kicker.c      **** 	timer_get_ms(&time_now);
+ 566               	.LM51:
+ 567 023a CE01      		movw r24,r28
+ 568 023c 4F96      		adiw r24,31
+ 569 023e 0E94 0000 		call timer_get_ms
+ 126:kicker.c      **** 	uint32_t kicktime = time_now - kickdelay;
+ 571               	.LM52:
+ 572 0242 8F8C      		ldd r8,Y+31
+ 573 0244 98A0      		ldd r9,Y+32
+ 574 0246 A9A0      		ldd r10,Y+33
+ 575 0248 BAA0      		ldd r11,Y+34
+ 576 024a 8C18      		sub r8,r12
+ 577 024c 9D08      		sbc r9,r13
+ 578 024e AE08      		sbc r10,r14
+ 579 0250 BF08      		sbc r11,r15
+ 127:kicker.c      **** 
+ 128:kicker.c      **** 	// debug time between kicker message and release
+ 129:kicker.c      **** 	char msg[30];
+ 130:kicker.c      **** 	sprintf(msg, "Kickdelay: %lu ms", kickdelay);
+ 581               	.LM53:
+ 582 0252 FF92      		push r15
+ 583 0254 EF92      		push r14
+ 584 0256 DF92      		push r13
+ 585 0258 CF92      		push r12
+ 586 025a 80E0      		ldi r24,lo8(.LC4)
+ 587 025c 90E0      		ldi r25,hi8(.LC4)
+ 588 025e 9F93      		push r25
+ 589 0260 8F93      		push r24
+ 590 0262 8E01      		movw r16,r28
+ 591 0264 0F5F      		subi r16,-1
+ 592 0266 1F4F      		sbci r17,-1
+ 593 0268 1F93      		push r17
+ 594 026a 0F93      		push r16
+ 595 026c 0E94 0000 		call sprintf
+ 131:kicker.c      **** 	debug(msg);
+ 597               	.LM54:
+ 598 0270 C801      		movw r24,r16
+ 599 0272 0E94 0000 		call debug
+ 132:kicker.c      **** 	sprintf(msg, "Kicktime: %lu ms", kicktime);
+ 601               	.LM55:
+ 602 0276 BF92      		push r11
+ 603 0278 AF92      		push r10
+ 604 027a 9F92      		push r9
+ 605 027c 8F92      		push r8
+ 606 027e 80E0      		ldi r24,lo8(.LC5)
+ 607 0280 90E0      		ldi r25,hi8(.LC5)
+ 608 0282 9F93      		push r25
+ 609 0284 8F93      		push r24
+ 610 0286 1F93      		push r17
+ 611 0288 0F93      		push r16
+ 612 028a 0E94 0000 		call sprintf
+ 133:kicker.c      **** 	debug(msg);
+ 614               	.LM56:
+ 615 028e C801      		movw r24,r16
+ 616 0290 0E94 0000 		call debug
+ 134:kicker.c      **** 
+ 135:kicker.c      **** 	// everything fine
+ 136:kicker.c      **** 	kick_job.timestamp = 0;
+ 618               	.LM57:
+ 619 0294 1092 0000 		sts kick_job,__zero_reg__
+ 620 0298 1092 0000 		sts kick_job+1,__zero_reg__
+ 621 029c 1092 0000 		sts kick_job+2,__zero_reg__
+ 622 02a0 1092 0000 		sts kick_job+3,__zero_reg__
+ 137:kicker.c      **** 	timer_get_ms(&kick_job.last_kick);
+ 624               	.LM58:
+ 625 02a4 80E0      		ldi r24,lo8(kick_job+4)
+ 626 02a6 90E0      		ldi r25,hi8(kick_job+4)
+ 627 02a8 0E94 0000 		call timer_get_ms
+ 138:kicker.c      **** 
+ 139:kicker.c      **** 	return;
+ 629               	.LM59:
+ 630 02ac 0FB6      		in __tmp_reg__,__SREG__
+ 631 02ae F894      		cli
+ 632 02b0 DEBF      		out __SP_H__,r29
+ 633 02b2 0FBE      		out __SREG__,__tmp_reg__
+ 634 02b4 CDBF      		out __SP_L__,r28
+ 635               	.L11:
+ 636               	/* epilogue start */
+ 140:kicker.c      **** }
+ 638               	.LM60:
+ 639 02b6 A296      		adiw r28,34
+ 640 02b8 0FB6      		in __tmp_reg__,__SREG__
+ 641 02ba F894      		cli
+ 642 02bc DEBF      		out __SP_H__,r29
+ 643 02be 0FBE      		out __SREG__,__tmp_reg__
+ 644 02c0 CDBF      		out __SP_L__,r28
+ 645 02c2 DF91      		pop r29
+ 646 02c4 CF91      		pop r28
+ 647 02c6 1F91      		pop r17
+ 648 02c8 0F91      		pop r16
+ 649 02ca FF90      		pop r15
+ 650 02cc EF90      		pop r14
+ 651 02ce DF90      		pop r13
+ 652 02d0 CF90      		pop r12
+ 653 02d2 BF90      		pop r11
+ 654 02d4 AF90      		pop r10
+ 655 02d6 9F90      		pop r9
+ 656 02d8 8F90      		pop r8
+ 657 02da 0895      		ret
+ 665               	.Lscope5:
+ 666               	.global	kick_job
+ 667               		.section .bss
+ 670               	kick_job:
+ 671 0000 0000 0000 		.zero	11
+ 671      0000 0000 
+ 671      0000 00
+ 673               		.text
+ 675               	.Letext0:
+ 676               		.ident	"GCC: (GNU) 4.9.2"
+ 677               	.global __do_copy_data
+ 678               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 kicker.c
+     /tmp/ccpkhVIw.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccpkhVIw.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccpkhVIw.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccpkhVIw.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccpkhVIw.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccpkhVIw.s:110    .text:0000000000000000 kicker_init
+     /tmp/ccpkhVIw.s:131    .text:0000000000000006 kicker_addKickJob
+     /tmp/ccpkhVIw.s:670    .bss:0000000000000000 kick_job
+     /tmp/ccpkhVIw.s:168    .text:0000000000000022 kicker_addKickJobForced
+     /tmp/ccpkhVIw.s:252    .text:0000000000000074 kicker_kick
+     /tmp/ccpkhVIw.s:393    .text:000000000000011e kicker_ctrl
+
+UNDEFINED SYMBOLS
+timer_get_ms
+booster_getCapacitorVoltage
+warning
+__floatunsisf
+__divsf3
+__fixunssfsi
+booster_deactivate
+sprintf
+error
+kicker_ticks
+booster_activate
+booster_canKick
+debug
+__do_copy_data
+__do_clear_bss

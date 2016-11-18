@@ -1,0 +1,1834 @@
+   1               		.file	"can_lib.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 117               	.global	can_init
+ 119               	can_init:
+   1:can_lib.c     **** /*
+   2:can_lib.c     ****  * can_lib.c
+   3:can_lib.c     ****  
+   4:can_lib.c     **** 	The contents of this file were originally from the CAN Software Library
+   5:can_lib.c     **** 	provided by Atmel written for AT90CAN devices. Use of this file is subject 
+   6:can_lib.c     **** 	to Atmel's End User License Agreement.
+   7:can_lib.c     ****  
+   8:can_lib.c     ****  */ 
+   9:can_lib.c     **** 
+  10:can_lib.c     **** //******************************************************************************
+  11:can_lib.c     **** //! @file $RCSfile: can_lib.c,v $
+  12:can_lib.c     **** //!
+  13:can_lib.c     **** //! Copyright (c) 2007 Atmel.
+  14:can_lib.c     **** //!
+  15:can_lib.c     **** //! Use of this program is subject to Atmel's End User License Agreement.
+  16:can_lib.c     **** //! Please read file license.txt for copyright notice.
+  17:can_lib.c     **** //!
+  18:can_lib.c     **** //! @brief This file contains the library of functions of:
+  19:can_lib.c     **** //!             - CAN (Controller Array Network)
+  20:can_lib.c     **** //!             - AT90CAN128/64/32
+  21:can_lib.c     **** //!
+  22:can_lib.c     **** //! This file can be parsed by Doxygen for automatic documentation generation.
+  23:can_lib.c     **** //! This file has been validated with AVRStudio-413528/WinAVR-20070122.
+  24:can_lib.c     **** //!
+  25:can_lib.c     **** //! @version $Revision: 3.20 $ $Name: jtellier $
+  26:can_lib.c     **** //!
+  27:can_lib.c     **** //! @todo
+  28:can_lib.c     **** //! @bug
+  29:can_lib.c     **** //******************************************************************************
+  30:can_lib.c     **** 
+  31:can_lib.c     **** //_____ I N C L U D E S ________________________________________________________
+  32:can_lib.c     **** #include "config.h"
+  33:can_lib.c     **** #include "can_lib.h"
+  34:can_lib.c     **** #include "can_drv.h"
+  35:can_lib.c     **** 
+  36:can_lib.c     **** //_____ D E F I N I T I O N S __________________________________________________
+  37:can_lib.c     **** 
+  38:can_lib.c     **** //_____ F U N C T I O N S ______________________________________________________
+  39:can_lib.c     **** 
+  40:can_lib.c     **** //------------------------------------------------------------------------------
+  41:can_lib.c     **** //  @fn can_init
+  42:can_lib.c     **** //!
+  43:can_lib.c     **** //! CAN macro initialization. Reset the CAN peripheral, initialize the bit
+  44:can_lib.c     **** //! timing, initialize all the registers mapped in SRAM to put MObs in
+  45:can_lib.c     **** //! inactive state and enable the CAN macro.
+  46:can_lib.c     **** //!
+  47:can_lib.c     **** //! @warning The CAN macro will be enable after seen on CAN bus a receceive
+  48:can_lib.c     **** //!          level as long as of an inter frame (hardware feature).
+  49:can_lib.c     **** //!
+  50:can_lib.c     **** //! @param  Mode (for "can_fixed_baudrate" param not used)
+  51:can_lib.c     **** //!         ==0: start CAN bit timing evaluation from faster baudrate
+  52:can_lib.c     **** //!         ==1: start CAN bit timing evaluation with CANBTx registers
+  53:can_lib.c     **** //!              contents
+  54:can_lib.c     **** //!
+  55:can_lib.c     **** //! @return Baudrate Status
+  56:can_lib.c     **** //!         ==0: research of bit timing configuration failed
+  57:can_lib.c     **** //!         ==1: baudrate performed 
+  58:can_lib.c     **** //!
+  59:can_lib.c     **** //------------------------------------------------------------------------------
+  60:can_lib.c     **** uint8_t can_init(uint8_t mode)
+  61:can_lib.c     **** {
+ 121               	.LM0:
+ 122               	.LFBB1:
+ 123               	/* prologue: function */
+ 124               	/* frame size = 0 */
+ 125               	/* stack size = 0 */
+ 126               	.L__stack_usage = 0
+  62:can_lib.c     ****     if ((Can_bit_timing(mode))==0) return (0);  // c.f. macro in "can_drv.h"
+ 128               	.LM1:
+ 129 0000 0E94 0000 		call can_fixed_baudrate
+ 130 0004 8823      		tst r24
+ 131 0006 01F0      		breq .L2
+  63:can_lib.c     ****     can_clear_all_mob();                        // c.f. function in "can_drv.c"
+ 133               	.LM2:
+ 134 0008 0E94 0000 		call can_clear_all_mob
+  64:can_lib.c     ****     Can_enable();                               // c.f. macro in "can_drv.h" 
+ 136               	.LM3:
+ 137 000c 8091 D800 		lds r24,216
+ 138 0010 8260      		ori r24,lo8(2)
+ 139 0012 8093 D800 		sts 216,r24
+  65:can_lib.c     ****     return (1);
+ 141               	.LM4:
+ 142 0016 81E0      		ldi r24,lo8(1)
+ 143               	.L2:
+  66:can_lib.c     **** }
+ 145               	.LM5:
+ 146 0018 0895      		ret
+ 148               	.Lscope1:
+ 151               	.global	can_cmd
+ 153               	can_cmd:
+  67:can_lib.c     **** 
+  68:can_lib.c     **** //------------------------------------------------------------------------------
+  69:can_lib.c     **** //  @fn can_cmd
+  70:can_lib.c     **** //!
+  71:can_lib.c     **** //! This function takes a CAN descriptor, analyses the action to do:
+  72:can_lib.c     **** //! transmit, receive or abort.
+  73:can_lib.c     **** //! This function returns a status (CAN_CMD_ACCEPTED or CAN_CMD_REFUSED) if
+  74:can_lib.c     **** //! a MOb for Rx or Tx has been found. If no MOB has been found, the
+  75:can_lib.c     **** //! application must be retry at a later date.
+  76:can_lib.c     **** //! This function also updates the CAN descriptor status (MOB_PENDING or
+  77:can_lib.c     **** //! MOB_NOT_REACHED) if a MOb for Rx or Tx has been found. If aborting
+  78:can_lib.c     **** //! is performed, the CAN descriptor status will be set to STATUS_CLEARED.
+  79:can_lib.c     **** //!
+  80:can_lib.c     **** //! @param  st_cmd_t* - Can_descriptor pointer on CAN descriptor structure
+  81:can_lib.c     **** //!         to select the action to do.
+  82:can_lib.c     **** //!
+  83:can_lib.c     **** //! @return CAN_CMD_ACCEPTED - command is accepted
+  84:can_lib.c     **** //!         CAN_CMD_REFUSED  - command is refused
+  85:can_lib.c     **** //!
+  86:can_lib.c     **** //------------------------------------------------------------------------------
+  87:can_lib.c     **** uint8_t can_cmd(st_cmd_t* cmd)
+  88:can_lib.c     **** {
+ 155               	.LM6:
+ 156               	.LFBB2:
+ 157 001a 0F93      		push r16
+ 158 001c 1F93      		push r17
+ 159 001e CF93      		push r28
+ 160 0020 DF93      		push r29
+ 161 0022 00D0      		rcall .
+ 162 0024 00D0      		rcall .
+ 163 0026 CDB7      		in r28,__SP_L__
+ 164 0028 DEB7      		in r29,__SP_H__
+ 165               	/* prologue: function */
+ 166               	/* frame size = 4 */
+ 167               	/* stack size = 8 */
+ 168               	.L__stack_usage = 8
+ 169 002a FC01      		movw r30,r24
+  89:can_lib.c     ****   uint8_t mob_handle, cpt;
+  90:can_lib.c     ****   uint32_t u32_temp;
+  91:can_lib.c     ****   
+  92:can_lib.c     ****   if (cmd->cmd == CMD_ABORT)
+ 171               	.LM7:
+ 172 002c 8181      		ldd r24,Z+1
+ 173 002e 8C30      		cpi r24,lo8(12)
+ 174 0030 01F4      		brne .L8
+  93:can_lib.c     ****   {
+  94:can_lib.c     ****     if (cmd->status == MOB_PENDING)
+ 176               	.LM8:
+ 177 0032 8185      		ldd r24,Z+9
+ 178 0034 8036      		cpi r24,lo8(96)
+ 179 0036 01F0      		breq .+2
+ 180 0038 00C0      		rjmp .L66
+  95:can_lib.c     ****     {
+  96:can_lib.c     ****       // Rx or Tx not yet performed
+  97:can_lib.c     ****       Can_set_mob(cmd->handle);
+ 182               	.LM9:
+ 183 003a 8081      		ld r24,Z
+ 184 003c 8295      		swap r24
+ 185 003e 807F      		andi r24,lo8(-16)
+ 186 0040 8093 ED00 		sts 237,r24
+  98:can_lib.c     ****       Can_mob_abort();
+ 188               	.LM10:
+ 189 0044 8091 EF00 		lds r24,239
+ 190 0048 8F73      		andi r24,lo8(63)
+ 191 004a 8093 EF00 		sts 239,r24
+  99:can_lib.c     ****       Can_clear_status_mob();       // To be sure !
+ 193               	.LM11:
+ 194 004e 1092 EE00 		sts 238,__zero_reg__
+ 100:can_lib.c     ****       cmd->handle = 0;
+ 196               	.LM12:
+ 197 0052 1082      		st Z,__zero_reg__
+ 198 0054 00C0      		rjmp .L66
+ 199               	.L8:
+ 200 0056 8F01      		movw r16,r30
+ 101:can_lib.c     ****     }
+ 102:can_lib.c     ****     cmd->status = STATUS_CLEARED; 
+ 103:can_lib.c     ****   }
+ 104:can_lib.c     ****   else
+ 105:can_lib.c     ****   {
+ 106:can_lib.c     ****     mob_handle = can_get_mob_free();
+ 202               	.LM13:
+ 203 0058 0E94 0000 		call can_get_mob_free
+ 107:can_lib.c     ****     if (mob_handle!= NO_MOB)
+ 205               	.LM14:
+ 206 005c 8F3F      		cpi r24,lo8(-1)
+ 207 005e 01F4      		brne .+2
+ 208 0060 00C0      		rjmp .L11
+ 108:can_lib.c     ****     {
+ 109:can_lib.c     ****       cmd->status = MOB_PENDING; 
+ 210               	.LM15:
+ 211 0062 90E6      		ldi r25,lo8(96)
+ 212 0064 D801      		movw r26,r16
+ 213 0066 1996      		adiw r26,9
+ 214 0068 9C93      		st X,r25
+ 215 006a 1997      		sbiw r26,9
+ 110:can_lib.c     ****       cmd->handle = mob_handle;
+ 217               	.LM16:
+ 218 006c 8C93      		st X,r24
+ 111:can_lib.c     ****       Can_set_mob(mob_handle);
+ 220               	.LM17:
+ 221 006e 8295      		swap r24
+ 222 0070 807F      		andi r24,lo8(-16)
+ 223 0072 8093 ED00 		sts 237,r24
+ 224               	.LBB2:
+ 112:can_lib.c     ****       Can_clear_mob();
+ 226               	.LM18:
+ 227 0076 EEEE      		ldi r30,lo8(-18)
+ 228 0078 F0E0      		ldi r31,0
+ 229               	.L12:
+ 231               	.LM19:
+ 232 007a 1192      		st Z+,__zero_reg__
+ 233 007c E83F      		cpi r30,-8
+ 234 007e F105      		cpc r31,__zero_reg__
+ 235 0080 01F4      		brne .L12
+ 236               	.LBE2:
+ 113:can_lib.c     ****           
+ 114:can_lib.c     ****       switch (cmd->cmd)
+ 238               	.LM20:
+ 239 0082 D801      		movw r26,r16
+ 240 0084 1196      		adiw r26,1
+ 241 0086 EC91      		ld r30,X
+ 242 0088 8E2F      		mov r24,r30
+ 243 008a 90E0      		ldi r25,0
+ 244 008c FC01      		movw r30,r24
+ 245 008e 3197      		sbiw r30,1
+ 246 0090 EB30      		cpi r30,11
+ 247 0092 F105      		cpc r31,__zero_reg__
+ 248 0094 00F0      		brlo .+2
+ 249 0096 00C0      		rjmp .L13
+ 250 0098 E050      		subi r30,lo8(-(gs(.L15)))
+ 251 009a F040      		sbci r31,hi8(-(gs(.L15)))
+ 252 009c 0C94 0000 		jmp __tablejump2__
+ 253               		.section	.progmem.gcc_sw_table,"a",@progbits
+ 254               		.p2align	1
+ 255               	.L15:
+ 256 0000 0000      		.word gs(.L14)
+ 257 0002 0000      		.word gs(.L16)
+ 258 0004 0000      		.word gs(.L17)
+ 259 0006 0000      		.word gs(.L18)
+ 260 0008 0000      		.word gs(.L19)
+ 261 000a 0000      		.word gs(.L20)
+ 262 000c 0000      		.word gs(.L21)
+ 263 000e 0000      		.word gs(.L22)
+ 264 0010 0000      		.word gs(.L23)
+ 265 0012 0000      		.word gs(.L49)
+ 266 0014 0000      		.word gs(.L25)
+ 267               		.text
+ 268               	.L14:
+ 115:can_lib.c     ****       {
+ 116:can_lib.c     ****         //------------      
+ 117:can_lib.c     ****         case CMD_TX:    
+ 118:can_lib.c     ****           if (cmd->ctrl.ide){ Can_set_ext_id(cmd->id.ext);}
+ 270               	.LM21:
+ 271 00a0 F801      		movw r30,r16
+ 272 00a2 8385      		ldd r24,Z+11
+ 273 00a4 8823      		tst r24
+ 274 00a6 01F0      		breq .L26
+ 276               	.LM22:
+ 277 00a8 8481      		ldd r24,Z+4
+ 278 00aa 8295      		swap r24
+ 279 00ac 8695      		lsr r24
+ 280 00ae 8770      		andi r24,lo8(7)
+ 281 00b0 9581      		ldd r25,Z+5
+ 282 00b2 F8E0      		ldi r31,lo8(8)
+ 283 00b4 9F9F      		mul r25,r31
+ 284 00b6 800D      		add r24,r0
+ 285 00b8 1124      		clr __zero_reg__
+ 286 00ba 8093 F300 		sts 243,r24
+ 287 00be D801      		movw r26,r16
+ 288 00c0 1396      		adiw r26,3
+ 289 00c2 8C91      		ld r24,X
+ 290 00c4 1397      		sbiw r26,3
+ 291 00c6 8295      		swap r24
+ 292 00c8 8695      		lsr r24
+ 293 00ca 8770      		andi r24,lo8(7)
+ 294 00cc 1496      		adiw r26,4
+ 295 00ce 9C91      		ld r25,X
+ 296 00d0 B8E0      		ldi r27,lo8(8)
+ 297 00d2 9B9F      		mul r25,r27
+ 298 00d4 800D      		add r24,r0
+ 299 00d6 1124      		clr __zero_reg__
+ 300 00d8 8093 F200 		sts 242,r24
+ 301 00dc F801      		movw r30,r16
+ 302 00de 8281      		ldd r24,Z+2
+ 303 00e0 8295      		swap r24
+ 304 00e2 8695      		lsr r24
+ 305 00e4 8770      		andi r24,lo8(7)
+ 306 00e6 9381      		ldd r25,Z+3
+ 307 00e8 F8E0      		ldi r31,lo8(8)
+ 308 00ea 9F9F      		mul r25,r31
+ 309 00ec 800D      		add r24,r0
+ 310 00ee 1124      		clr __zero_reg__
+ 311 00f0 8093 F100 		sts 241,r24
+ 312 00f4 D801      		movw r26,r16
+ 313 00f6 1296      		adiw r26,2
+ 314 00f8 8C91      		ld r24,X
+ 315 00fa 880F      		lsl r24
+ 316 00fc 880F      		lsl r24
+ 317 00fe 880F      		lsl r24
+ 318 0100 8093 F000 		sts 240,r24
+ 319 0104 8091 EF00 		lds r24,239
+ 320 0108 8061      		ori r24,lo8(16)
+ 321 010a 00C0      		rjmp .L51
+ 322               	.L26:
+ 119:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 324               	.LM23:
+ 325 010c F801      		movw r30,r16
+ 326 010e 8281      		ldd r24,Z+2
+ 327 0110 8695      		lsr r24
+ 328 0112 8695      		lsr r24
+ 329 0114 8695      		lsr r24
+ 330 0116 9381      		ldd r25,Z+3
+ 331 0118 F0E2      		ldi r31,lo8(32)
+ 332 011a 9F9F      		mul r25,r31
+ 333 011c 800D      		add r24,r0
+ 334 011e 1124      		clr __zero_reg__
+ 335 0120 8093 F300 		sts 243,r24
+ 336 0124 D801      		movw r26,r16
+ 337 0126 1296      		adiw r26,2
+ 338 0128 8C91      		ld r24,X
+ 339 012a 8295      		swap r24
+ 340 012c 880F      		lsl r24
+ 341 012e 807E      		andi r24,lo8(-32)
+ 342 0130 8093 F200 		sts 242,r24
+ 343 0134 8091 EF00 		lds r24,239
+ 344 0138 8F7E      		andi r24,lo8(-17)
+ 345               	.L51:
+ 346 013a 8093 EF00 		sts 239,r24
+ 347               	.LBB3:
+ 112:can_lib.c     ****           
+ 349               	.LM24:
+ 350 013e 80E0      		ldi r24,0
+ 351               	.L28:
+ 352               	.LBE3:
+ 120:can_lib.c     ****           for (cpt=0;cpt<cmd->dlc;cpt++) CANMSG = *(cmd->pt_data + cpt);
+ 354               	.LM25:
+ 355 0140 F801      		movw r30,r16
+ 356 0142 9681      		ldd r25,Z+6
+ 357 0144 8917      		cp r24,r25
+ 358 0146 00F4      		brsh .L69
+ 360               	.LM26:
+ 361 0148 D801      		movw r26,r16
+ 362 014a 1796      		adiw r26,7
+ 363 014c ED91      		ld r30,X+
+ 364 014e FC91      		ld r31,X
+ 365 0150 1897      		sbiw r26,7+1
+ 366 0152 E80F      		add r30,r24
+ 367 0154 F11D      		adc r31,__zero_reg__
+ 368 0156 9081      		ld r25,Z
+ 369 0158 9093 FA00 		sts 250,r25
+ 370 015c 8F5F      		subi r24,lo8(-(1))
+ 371 015e 00C0      		rjmp .L28
+ 372               	.L69:
+ 121:can_lib.c     ****           if (cmd->ctrl.rtr) Can_set_rtr(); 
+ 374               	.LM27:
+ 375 0160 8285      		ldd r24,Z+10
+ 376 0162 8823      		tst r24
+ 377 0164 01F0      		breq .L30
+ 379               	.LM28:
+ 380 0166 8091 F000 		lds r24,240
+ 381 016a 8460      		ori r24,lo8(4)
+ 382 016c 00C0      		rjmp .L52
+ 383               	.L30:
+ 122:can_lib.c     ****             else Can_clear_rtr();    
+ 385               	.LM29:
+ 386 016e 8091 F000 		lds r24,240
+ 387 0172 8B7F      		andi r24,lo8(-5)
+ 388               	.L52:
+ 389 0174 8093 F000 		sts 240,r24
+ 123:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 391               	.LM30:
+ 392 0178 9091 EF00 		lds r25,239
+ 393 017c D801      		movw r26,r16
+ 394               	.L62:
+ 395 017e 1696      		adiw r26,6
+ 396 0180 8C91      		ld r24,X
+ 397 0182 00C0      		rjmp .L59
+ 398               	.L16:
+ 124:can_lib.c     ****           Can_config_tx();
+ 125:can_lib.c     ****           break;
+ 126:can_lib.c     ****         //------------      
+ 127:can_lib.c     ****         case CMD_TX_DATA:    
+ 128:can_lib.c     ****           if (cmd->ctrl.ide){ Can_set_ext_id(cmd->id.ext);}
+ 400               	.LM31:
+ 401 0184 F801      		movw r30,r16
+ 402 0186 8385      		ldd r24,Z+11
+ 403 0188 8823      		tst r24
+ 404 018a 01F0      		breq .L32
+ 406               	.LM32:
+ 407 018c 8481      		ldd r24,Z+4
+ 408 018e 8295      		swap r24
+ 409 0190 8695      		lsr r24
+ 410 0192 8770      		andi r24,lo8(7)
+ 411 0194 9581      		ldd r25,Z+5
+ 412 0196 F8E0      		ldi r31,lo8(8)
+ 413 0198 9F9F      		mul r25,r31
+ 414 019a 800D      		add r24,r0
+ 415 019c 1124      		clr __zero_reg__
+ 416 019e 8093 F300 		sts 243,r24
+ 417 01a2 D801      		movw r26,r16
+ 418 01a4 1396      		adiw r26,3
+ 419 01a6 8C91      		ld r24,X
+ 420 01a8 1397      		sbiw r26,3
+ 421 01aa 8295      		swap r24
+ 422 01ac 8695      		lsr r24
+ 423 01ae 8770      		andi r24,lo8(7)
+ 424 01b0 1496      		adiw r26,4
+ 425 01b2 9C91      		ld r25,X
+ 426 01b4 B8E0      		ldi r27,lo8(8)
+ 427 01b6 9B9F      		mul r25,r27
+ 428 01b8 800D      		add r24,r0
+ 429 01ba 1124      		clr __zero_reg__
+ 430 01bc 8093 F200 		sts 242,r24
+ 431 01c0 F801      		movw r30,r16
+ 432 01c2 8281      		ldd r24,Z+2
+ 433 01c4 8295      		swap r24
+ 434 01c6 8695      		lsr r24
+ 435 01c8 8770      		andi r24,lo8(7)
+ 436 01ca 9381      		ldd r25,Z+3
+ 437 01cc F8E0      		ldi r31,lo8(8)
+ 438 01ce 9F9F      		mul r25,r31
+ 439 01d0 800D      		add r24,r0
+ 440 01d2 1124      		clr __zero_reg__
+ 441 01d4 8093 F100 		sts 241,r24
+ 442 01d8 D801      		movw r26,r16
+ 443 01da 1296      		adiw r26,2
+ 444 01dc 8C91      		ld r24,X
+ 445 01de 880F      		lsl r24
+ 446 01e0 880F      		lsl r24
+ 447 01e2 880F      		lsl r24
+ 448 01e4 8093 F000 		sts 240,r24
+ 449 01e8 8091 EF00 		lds r24,239
+ 450 01ec 8061      		ori r24,lo8(16)
+ 451 01ee 00C0      		rjmp .L53
+ 452               	.L32:
+ 129:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 454               	.LM33:
+ 455 01f0 F801      		movw r30,r16
+ 456 01f2 8281      		ldd r24,Z+2
+ 457 01f4 8695      		lsr r24
+ 458 01f6 8695      		lsr r24
+ 459 01f8 8695      		lsr r24
+ 460 01fa 9381      		ldd r25,Z+3
+ 461 01fc F0E2      		ldi r31,lo8(32)
+ 462 01fe 9F9F      		mul r25,r31
+ 463 0200 800D      		add r24,r0
+ 464 0202 1124      		clr __zero_reg__
+ 465 0204 8093 F300 		sts 243,r24
+ 466 0208 D801      		movw r26,r16
+ 467 020a 1296      		adiw r26,2
+ 468 020c 8C91      		ld r24,X
+ 469 020e 8295      		swap r24
+ 470 0210 880F      		lsl r24
+ 471 0212 807E      		andi r24,lo8(-32)
+ 472 0214 8093 F200 		sts 242,r24
+ 473 0218 8091 EF00 		lds r24,239
+ 474 021c 8F7E      		andi r24,lo8(-17)
+ 475               	.L53:
+ 476 021e 8093 EF00 		sts 239,r24
+ 477               	.LBB4:
+ 112:can_lib.c     ****           
+ 479               	.LM34:
+ 480 0222 80E0      		ldi r24,0
+ 481               	.L34:
+ 482               	.LBE4:
+ 130:can_lib.c     ****           for (cpt=0;cpt<cmd->dlc;cpt++) CANMSG = *(cmd->pt_data + cpt);
+ 484               	.LM35:
+ 485 0224 F801      		movw r30,r16
+ 486 0226 9681      		ldd r25,Z+6
+ 487 0228 8917      		cp r24,r25
+ 488 022a 00F4      		brsh .L70
+ 490               	.LM36:
+ 491 022c D801      		movw r26,r16
+ 492 022e 1796      		adiw r26,7
+ 493 0230 ED91      		ld r30,X+
+ 494 0232 FC91      		ld r31,X
+ 495 0234 1897      		sbiw r26,7+1
+ 496 0236 E80F      		add r30,r24
+ 497 0238 F11D      		adc r31,__zero_reg__
+ 498 023a 9081      		ld r25,Z
+ 499 023c 9093 FA00 		sts 250,r25
+ 500 0240 8F5F      		subi r24,lo8(-(1))
+ 501 0242 00C0      		rjmp .L34
+ 502               	.L70:
+ 131:can_lib.c     ****           cmd->ctrl.rtr=0; Can_clear_rtr();
+ 504               	.LM37:
+ 505 0244 1286      		std Z+10,__zero_reg__
+ 506 0246 8091 F000 		lds r24,240
+ 507 024a 8B7F      		andi r24,lo8(-5)
+ 508 024c 8093 F000 		sts 240,r24
+ 132:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 510               	.LM38:
+ 511 0250 9091 EF00 		lds r25,239
+ 512 0254 8681      		ldd r24,Z+6
+ 513               	.L59:
+ 514 0256 892B      		or r24,r25
+ 515 0258 8093 EF00 		sts 239,r24
+ 133:can_lib.c     ****           Can_config_tx();
+ 517               	.LM39:
+ 518 025c 8091 EF00 		lds r24,239
+ 519 0260 8F73      		andi r24,lo8(63)
+ 520 0262 8093 EF00 		sts 239,r24
+ 521 0266 8091 EF00 		lds r24,239
+ 522 026a 8064      		ori r24,lo8(64)
+ 523               	.L61:
+ 524 026c 8093 EF00 		sts 239,r24
+ 525               	.L60:
+ 134:can_lib.c     ****           break;
+ 135:can_lib.c     ****         //------------      
+ 136:can_lib.c     ****         case CMD_TX_REMOTE:       
+ 137:can_lib.c     ****           if (cmd->ctrl.ide){ Can_set_ext_id(cmd->id.ext);}
+ 138:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 139:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtr();
+ 140:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 141:can_lib.c     ****           Can_config_tx();
+ 142:can_lib.c     ****           break;
+ 143:can_lib.c     ****         //------------      
+ 144:can_lib.c     ****         case CMD_RX:
+ 145:can_lib.c     ****           u32_temp=0; Can_set_ext_msk(u32_temp);
+ 146:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 147:can_lib.c     ****           Can_clear_rtrmsk();
+ 148:can_lib.c     ****           Can_clear_idemsk();
+ 149:can_lib.c     ****           Can_config_rx();       
+ 150:can_lib.c     ****           break;
+ 151:can_lib.c     ****         //------------      
+ 152:can_lib.c     ****         case CMD_RX_DATA:
+ 153:can_lib.c     ****           u32_temp=0; Can_set_ext_msk(u32_temp);
+ 154:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 155:can_lib.c     ****           cmd->ctrl.rtr=0; Can_set_rtrmsk(); Can_clear_rtr();
+ 156:can_lib.c     ****           Can_clear_idemsk();
+ 157:can_lib.c     ****           Can_config_rx();       
+ 158:can_lib.c     ****           break;
+ 159:can_lib.c     ****         //------------      
+ 160:can_lib.c     ****         case CMD_RX_REMOTE:
+ 161:can_lib.c     ****           u32_temp=0; Can_set_ext_msk(u32_temp);
+ 162:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 163:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 164:can_lib.c     ****           Can_clear_rplv();
+ 165:can_lib.c     ****           Can_clear_idemsk();
+ 166:can_lib.c     ****           Can_config_rx();       
+ 167:can_lib.c     ****           break;
+ 168:can_lib.c     ****         //------------      
+ 169:can_lib.c     ****         case CMD_RX_MASKED:
+ 170:can_lib.c     ****           if (cmd->ctrl.ide){ Can_set_ext_id(cmd->id.ext);}
+ 171:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 172:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 173:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 174:can_lib.c     ****           Can_clear_rtrmsk();
+ 175:can_lib.c     ****           Can_set_idemsk();
+ 176:can_lib.c     ****           Can_config_rx();       
+ 177:can_lib.c     ****           break;
+ 178:can_lib.c     ****         //------------      
+ 179:can_lib.c     ****         case CMD_RX_DATA_MASKED:
+ 180:can_lib.c     ****           if (cmd->ctrl.ide){ Can_set_ext_id(cmd->id.ext);}
+ 181:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 182:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 183:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 184:can_lib.c     ****           cmd->ctrl.rtr=0; Can_set_rtrmsk(); Can_clear_rtr();
+ 185:can_lib.c     ****           Can_set_idemsk();
+ 186:can_lib.c     ****           Can_config_rx();       
+ 187:can_lib.c     ****           break;
+ 188:can_lib.c     ****         //------------      
+ 189:can_lib.c     ****         case CMD_RX_REMOTE_MASKED:
+ 190:can_lib.c     ****           if (cmd->ctrl.ide){ Can_set_ext_id(cmd->id.ext);}
+ 191:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 192:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 193:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 194:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 195:can_lib.c     ****           Can_clear_rplv();
+ 196:can_lib.c     ****           Can_set_idemsk();
+ 197:can_lib.c     ****           Can_config_rx();       
+ 198:can_lib.c     ****           break;
+ 199:can_lib.c     ****         //------------      
+ 200:can_lib.c     ****         case CMD_REPLY:
+ 201:can_lib.c     ****           for (cpt=0;cpt<cmd->dlc;cpt++) CANMSG = *(cmd->pt_data + cpt);
+ 202:can_lib.c     ****           u32_temp=0; Can_set_ext_msk(u32_temp);
+ 203:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 204:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 205:can_lib.c     ****           Can_set_rplv();
+ 206:can_lib.c     ****           Can_clear_idemsk();
+ 207:can_lib.c     ****           Can_config_rx();       
+ 208:can_lib.c     ****           break;
+ 209:can_lib.c     ****         //------------      
+ 210:can_lib.c     ****         case CMD_REPLY_MASKED:
+ 211:can_lib.c     ****           if (cmd->ctrl.ide){ Can_set_ext_id(cmd->id.ext);}
+ 212:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 213:can_lib.c     ****           for (cpt=0;cpt<cmd->dlc;cpt++) CANMSG = *(cmd->pt_data + cpt);
+ 214:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 215:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 216:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 217:can_lib.c     ****           Can_set_rplv();
+ 218:can_lib.c     ****           Can_set_idemsk();
+ 219:can_lib.c     ****           Can_config_rx();       
+ 220:can_lib.c     ****           break;
+ 221:can_lib.c     ****         //------------      
+ 222:can_lib.c     ****         default:
+ 223:can_lib.c     ****           // case CMD_NONE or not implemented command
+ 224:can_lib.c     ****           cmd->status = STATUS_CLEARED; 
+ 225:can_lib.c     ****           break;
+ 226:can_lib.c     ****         //------------      
+ 227:can_lib.c     ****       } // switch (cmd ...
+ 228:can_lib.c     ****     } // if (mob_handle ...
+ 229:can_lib.c     ****     else
+ 230:can_lib.c     ****     {
+ 231:can_lib.c     ****       cmd->status = MOB_NOT_REACHED;
+ 232:can_lib.c     ****       return CAN_CMD_REFUSED;
+ 233:can_lib.c     ****     }
+ 234:can_lib.c     ****   } // else of no CMD_ABORT
+ 235:can_lib.c     ****   return CAN_CMD_ACCEPTED;
+ 527               	.LM40:
+ 528 0270 80E0      		ldi r24,0
+ 134:can_lib.c     ****           break;
+ 530               	.LM41:
+ 531 0272 00C0      		rjmp .L10
+ 532               	.L17:
+ 137:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 534               	.LM42:
+ 535 0274 D801      		movw r26,r16
+ 536 0276 1B96      		adiw r26,11
+ 537 0278 8C91      		ld r24,X
+ 538 027a 1B97      		sbiw r26,11
+ 539 027c 8823      		tst r24
+ 540 027e 01F0      		breq .L36
+ 137:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 542               	.LM43:
+ 543 0280 1496      		adiw r26,4
+ 544 0282 8C91      		ld r24,X
+ 545 0284 1497      		sbiw r26,4
+ 546 0286 8295      		swap r24
+ 547 0288 8695      		lsr r24
+ 548 028a 8770      		andi r24,lo8(7)
+ 549 028c 1596      		adiw r26,5
+ 550 028e 9C91      		ld r25,X
+ 551 0290 B8E0      		ldi r27,lo8(8)
+ 552 0292 9B9F      		mul r25,r27
+ 553 0294 800D      		add r24,r0
+ 554 0296 1124      		clr __zero_reg__
+ 555 0298 8093 F300 		sts 243,r24
+ 556 029c F801      		movw r30,r16
+ 557 029e 8381      		ldd r24,Z+3
+ 558 02a0 8295      		swap r24
+ 559 02a2 8695      		lsr r24
+ 560 02a4 8770      		andi r24,lo8(7)
+ 561 02a6 9481      		ldd r25,Z+4
+ 562 02a8 F8E0      		ldi r31,lo8(8)
+ 563 02aa 9F9F      		mul r25,r31
+ 564 02ac 800D      		add r24,r0
+ 565 02ae 1124      		clr __zero_reg__
+ 566 02b0 8093 F200 		sts 242,r24
+ 567 02b4 D801      		movw r26,r16
+ 568 02b6 1296      		adiw r26,2
+ 569 02b8 8C91      		ld r24,X
+ 570 02ba 1297      		sbiw r26,2
+ 571 02bc 8295      		swap r24
+ 572 02be 8695      		lsr r24
+ 573 02c0 8770      		andi r24,lo8(7)
+ 574 02c2 1396      		adiw r26,3
+ 575 02c4 9C91      		ld r25,X
+ 576 02c6 B8E0      		ldi r27,lo8(8)
+ 577 02c8 9B9F      		mul r25,r27
+ 578 02ca 800D      		add r24,r0
+ 579 02cc 1124      		clr __zero_reg__
+ 580 02ce 8093 F100 		sts 241,r24
+ 581 02d2 F801      		movw r30,r16
+ 582 02d4 8281      		ldd r24,Z+2
+ 583 02d6 880F      		lsl r24
+ 584 02d8 880F      		lsl r24
+ 585 02da 880F      		lsl r24
+ 586 02dc 8093 F000 		sts 240,r24
+ 587 02e0 8091 EF00 		lds r24,239
+ 588 02e4 8061      		ori r24,lo8(16)
+ 589 02e6 00C0      		rjmp .L54
+ 590               	.L36:
+ 138:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtr();
+ 592               	.LM44:
+ 593 02e8 D801      		movw r26,r16
+ 594 02ea 1296      		adiw r26,2
+ 595 02ec 8C91      		ld r24,X
+ 596 02ee 1297      		sbiw r26,2
+ 597 02f0 8695      		lsr r24
+ 598 02f2 8695      		lsr r24
+ 599 02f4 8695      		lsr r24
+ 600 02f6 1396      		adiw r26,3
+ 601 02f8 9C91      		ld r25,X
+ 602 02fa B0E2      		ldi r27,lo8(32)
+ 603 02fc 9B9F      		mul r25,r27
+ 604 02fe 800D      		add r24,r0
+ 605 0300 1124      		clr __zero_reg__
+ 606 0302 8093 F300 		sts 243,r24
+ 607 0306 F801      		movw r30,r16
+ 608 0308 8281      		ldd r24,Z+2
+ 609 030a 8295      		swap r24
+ 610 030c 880F      		lsl r24
+ 611 030e 807E      		andi r24,lo8(-32)
+ 612 0310 8093 F200 		sts 242,r24
+ 613 0314 8091 EF00 		lds r24,239
+ 614 0318 8F7E      		andi r24,lo8(-17)
+ 615               	.L54:
+ 616 031a 8093 EF00 		sts 239,r24
+ 139:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 618               	.LM45:
+ 619 031e 81E0      		ldi r24,lo8(1)
+ 620 0320 D801      		movw r26,r16
+ 621 0322 1A96      		adiw r26,10
+ 622 0324 8C93      		st X,r24
+ 623 0326 1A97      		sbiw r26,10
+ 624 0328 8091 F000 		lds r24,240
+ 625 032c 8460      		ori r24,lo8(4)
+ 626 032e 8093 F000 		sts 240,r24
+ 140:can_lib.c     ****           Can_config_tx();
+ 628               	.LM46:
+ 629 0332 9091 EF00 		lds r25,239
+ 630 0336 00C0      		rjmp .L62
+ 631               	.L18:
+ 145:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 633               	.LM47:
+ 634 0338 1982      		std Y+1,__zero_reg__
+ 635 033a 1A82      		std Y+2,__zero_reg__
+ 636 033c 1B82      		std Y+3,__zero_reg__
+ 637 033e 1C82      		std Y+4,__zero_reg__
+ 638 0340 1092 F700 		sts 247,__zero_reg__
+ 639 0344 8A81      		ldd r24,Y+2
+ 640 0346 8295      		swap r24
+ 641 0348 8695      		lsr r24
+ 642 034a 8770      		andi r24,lo8(7)
+ 643 034c 9B81      		ldd r25,Y+3
+ 644 034e B8E0      		ldi r27,lo8(8)
+ 645 0350 9B9F      		mul r25,r27
+ 646 0352 800D      		add r24,r0
+ 647 0354 1124      		clr __zero_reg__
+ 648 0356 8093 F600 		sts 246,r24
+ 649 035a 8981      		ldd r24,Y+1
+ 650 035c 8295      		swap r24
+ 651 035e 8695      		lsr r24
+ 652 0360 8770      		andi r24,lo8(7)
+ 653 0362 9A81      		ldd r25,Y+2
+ 654 0364 E8E0      		ldi r30,lo8(8)
+ 655 0366 9E9F      		mul r25,r30
+ 656 0368 800D      		add r24,r0
+ 657 036a 1124      		clr __zero_reg__
+ 658 036c 8093 F500 		sts 245,r24
+ 659 0370 8981      		ldd r24,Y+1
+ 660 0372 880F      		lsl r24
+ 661 0374 880F      		lsl r24
+ 662 0376 880F      		lsl r24
+ 663 0378 8093 F400 		sts 244,r24
+ 146:can_lib.c     ****           Can_clear_rtrmsk();
+ 665               	.LM48:
+ 666 037c 9091 EF00 		lds r25,239
+ 667 0380 D801      		movw r26,r16
+ 668 0382 1696      		adiw r26,6
+ 669 0384 8C91      		ld r24,X
+ 670 0386 892B      		or r24,r25
+ 671 0388 8093 EF00 		sts 239,r24
+ 147:can_lib.c     ****           Can_clear_idemsk();
+ 673               	.LM49:
+ 674 038c 8091 F400 		lds r24,244
+ 675 0390 8B7F      		andi r24,lo8(-5)
+ 676 0392 8093 F400 		sts 244,r24
+ 677 0396 00C0      		rjmp .L67
+ 678               	.L19:
+ 153:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 680               	.LM50:
+ 681 0398 1982      		std Y+1,__zero_reg__
+ 682 039a 1A82      		std Y+2,__zero_reg__
+ 683 039c 1B82      		std Y+3,__zero_reg__
+ 684 039e 1C82      		std Y+4,__zero_reg__
+ 685 03a0 1092 F700 		sts 247,__zero_reg__
+ 686 03a4 8A81      		ldd r24,Y+2
+ 687 03a6 8295      		swap r24
+ 688 03a8 8695      		lsr r24
+ 689 03aa 8770      		andi r24,lo8(7)
+ 690 03ac 9B81      		ldd r25,Y+3
+ 691 03ae B8E0      		ldi r27,lo8(8)
+ 692 03b0 9B9F      		mul r25,r27
+ 693 03b2 800D      		add r24,r0
+ 694 03b4 1124      		clr __zero_reg__
+ 695 03b6 8093 F600 		sts 246,r24
+ 696 03ba 8981      		ldd r24,Y+1
+ 697 03bc 8295      		swap r24
+ 698 03be 8695      		lsr r24
+ 699 03c0 8770      		andi r24,lo8(7)
+ 700 03c2 9A81      		ldd r25,Y+2
+ 701 03c4 E8E0      		ldi r30,lo8(8)
+ 702 03c6 9E9F      		mul r25,r30
+ 703 03c8 800D      		add r24,r0
+ 704 03ca 1124      		clr __zero_reg__
+ 705 03cc 8093 F500 		sts 245,r24
+ 706 03d0 8981      		ldd r24,Y+1
+ 707 03d2 880F      		lsl r24
+ 708 03d4 880F      		lsl r24
+ 709 03d6 880F      		lsl r24
+ 710 03d8 8093 F400 		sts 244,r24
+ 154:can_lib.c     ****           cmd->ctrl.rtr=0; Can_set_rtrmsk(); Can_clear_rtr();
+ 712               	.LM51:
+ 713 03dc 9091 EF00 		lds r25,239
+ 714 03e0 D801      		movw r26,r16
+ 715 03e2 1696      		adiw r26,6
+ 716 03e4 8C91      		ld r24,X
+ 717 03e6 1697      		sbiw r26,6
+ 718 03e8 892B      		or r24,r25
+ 719 03ea 8093 EF00 		sts 239,r24
+ 155:can_lib.c     ****           Can_clear_idemsk();
+ 721               	.LM52:
+ 722 03ee 1A96      		adiw r26,10
+ 723 03f0 1C92      		st X,__zero_reg__
+ 724 03f2 8091 F400 		lds r24,244
+ 725 03f6 8460      		ori r24,lo8(4)
+ 726 03f8 8093 F400 		sts 244,r24
+ 727 03fc 8091 F000 		lds r24,240
+ 728 0400 8B7F      		andi r24,lo8(-5)
+ 729 0402 8093 F000 		sts 240,r24
+ 730 0406 00C0      		rjmp .L67
+ 731               	.L20:
+ 161:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 733               	.LM53:
+ 734 0408 1982      		std Y+1,__zero_reg__
+ 735 040a 1A82      		std Y+2,__zero_reg__
+ 736 040c 1B82      		std Y+3,__zero_reg__
+ 737 040e 1C82      		std Y+4,__zero_reg__
+ 738 0410 1092 F700 		sts 247,__zero_reg__
+ 739 0414 8A81      		ldd r24,Y+2
+ 740 0416 8295      		swap r24
+ 741 0418 8695      		lsr r24
+ 742 041a 8770      		andi r24,lo8(7)
+ 743 041c 9B81      		ldd r25,Y+3
+ 744 041e B8E0      		ldi r27,lo8(8)
+ 745 0420 9B9F      		mul r25,r27
+ 746 0422 800D      		add r24,r0
+ 747 0424 1124      		clr __zero_reg__
+ 748 0426 8093 F600 		sts 246,r24
+ 749 042a 8981      		ldd r24,Y+1
+ 750 042c 8295      		swap r24
+ 751 042e 8695      		lsr r24
+ 752 0430 8770      		andi r24,lo8(7)
+ 753 0432 9A81      		ldd r25,Y+2
+ 754 0434 E8E0      		ldi r30,lo8(8)
+ 755 0436 9E9F      		mul r25,r30
+ 756 0438 800D      		add r24,r0
+ 757 043a 1124      		clr __zero_reg__
+ 758 043c 8093 F500 		sts 245,r24
+ 759 0440 8981      		ldd r24,Y+1
+ 760 0442 880F      		lsl r24
+ 761 0444 880F      		lsl r24
+ 762 0446 880F      		lsl r24
+ 763 0448 8093 F400 		sts 244,r24
+ 162:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 765               	.LM54:
+ 766 044c 9091 EF00 		lds r25,239
+ 767 0450 D801      		movw r26,r16
+ 768 0452 1696      		adiw r26,6
+ 769 0454 8C91      		ld r24,X
+ 770 0456 1697      		sbiw r26,6
+ 771 0458 892B      		or r24,r25
+ 772 045a 8093 EF00 		sts 239,r24
+ 163:can_lib.c     ****           Can_clear_rplv();
+ 774               	.LM55:
+ 775 045e 81E0      		ldi r24,lo8(1)
+ 776 0460 1A96      		adiw r26,10
+ 777 0462 8C93      		st X,r24
+ 778 0464 8091 F400 		lds r24,244
+ 779 0468 8460      		ori r24,lo8(4)
+ 780 046a 8093 F400 		sts 244,r24
+ 781 046e 8091 F000 		lds r24,240
+ 782 0472 8460      		ori r24,lo8(4)
+ 783 0474 8093 F000 		sts 240,r24
+ 164:can_lib.c     ****           Can_clear_idemsk();
+ 785               	.LM56:
+ 786 0478 8091 EF00 		lds r24,239
+ 787 047c 8F7D      		andi r24,lo8(-33)
+ 788 047e 00C0      		rjmp .L68
+ 789               	.L21:
+ 170:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 791               	.LM57:
+ 792 0480 F801      		movw r30,r16
+ 793 0482 8385      		ldd r24,Z+11
+ 794 0484 8823      		tst r24
+ 795 0486 01F0      		breq .L38
+ 170:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 797               	.LM58:
+ 798 0488 8481      		ldd r24,Z+4
+ 799 048a 8295      		swap r24
+ 800 048c 8695      		lsr r24
+ 801 048e 8770      		andi r24,lo8(7)
+ 802 0490 9581      		ldd r25,Z+5
+ 803 0492 F8E0      		ldi r31,lo8(8)
+ 804 0494 9F9F      		mul r25,r31
+ 805 0496 800D      		add r24,r0
+ 806 0498 1124      		clr __zero_reg__
+ 807 049a 8093 F300 		sts 243,r24
+ 808 049e D801      		movw r26,r16
+ 809 04a0 1396      		adiw r26,3
+ 810 04a2 8C91      		ld r24,X
+ 811 04a4 1397      		sbiw r26,3
+ 812 04a6 8295      		swap r24
+ 813 04a8 8695      		lsr r24
+ 814 04aa 8770      		andi r24,lo8(7)
+ 815 04ac 1496      		adiw r26,4
+ 816 04ae 9C91      		ld r25,X
+ 817 04b0 B8E0      		ldi r27,lo8(8)
+ 818 04b2 9B9F      		mul r25,r27
+ 819 04b4 800D      		add r24,r0
+ 820 04b6 1124      		clr __zero_reg__
+ 821 04b8 8093 F200 		sts 242,r24
+ 822 04bc F801      		movw r30,r16
+ 823 04be 8281      		ldd r24,Z+2
+ 824 04c0 8295      		swap r24
+ 825 04c2 8695      		lsr r24
+ 826 04c4 8770      		andi r24,lo8(7)
+ 827 04c6 9381      		ldd r25,Z+3
+ 828 04c8 F8E0      		ldi r31,lo8(8)
+ 829 04ca 9F9F      		mul r25,r31
+ 830 04cc 800D      		add r24,r0
+ 831 04ce 1124      		clr __zero_reg__
+ 832 04d0 8093 F100 		sts 241,r24
+ 833 04d4 D801      		movw r26,r16
+ 834 04d6 1296      		adiw r26,2
+ 835 04d8 8C91      		ld r24,X
+ 836 04da 880F      		lsl r24
+ 837 04dc 880F      		lsl r24
+ 838 04de 880F      		lsl r24
+ 839 04e0 8093 F000 		sts 240,r24
+ 840 04e4 8091 EF00 		lds r24,239
+ 841 04e8 8061      		ori r24,lo8(16)
+ 842 04ea 00C0      		rjmp .L55
+ 843               	.L38:
+ 171:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 845               	.LM59:
+ 846 04ec F801      		movw r30,r16
+ 847 04ee 8281      		ldd r24,Z+2
+ 848 04f0 8695      		lsr r24
+ 849 04f2 8695      		lsr r24
+ 850 04f4 8695      		lsr r24
+ 851 04f6 9381      		ldd r25,Z+3
+ 852 04f8 F0E2      		ldi r31,lo8(32)
+ 853 04fa 9F9F      		mul r25,r31
+ 854 04fc 800D      		add r24,r0
+ 855 04fe 1124      		clr __zero_reg__
+ 856 0500 8093 F300 		sts 243,r24
+ 857 0504 D801      		movw r26,r16
+ 858 0506 1296      		adiw r26,2
+ 859 0508 8C91      		ld r24,X
+ 860 050a 8295      		swap r24
+ 861 050c 880F      		lsl r24
+ 862 050e 807E      		andi r24,lo8(-32)
+ 863 0510 8093 F200 		sts 242,r24
+ 864 0514 8091 EF00 		lds r24,239
+ 865 0518 8F7E      		andi r24,lo8(-17)
+ 866               	.L55:
+ 867 051a 8093 EF00 		sts 239,r24
+ 172:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 869               	.LM60:
+ 870 051e 8FEF      		ldi r24,lo8(-1)
+ 871 0520 9FEF      		ldi r25,lo8(-1)
+ 872 0522 DC01      		movw r26,r24
+ 873 0524 8983      		std Y+1,r24
+ 874 0526 9A83      		std Y+2,r25
+ 875 0528 AB83      		std Y+3,r26
+ 876 052a BC83      		std Y+4,r27
+ 877 052c 8093 F700 		sts 247,r24
+ 878 0530 8A81      		ldd r24,Y+2
+ 879 0532 8295      		swap r24
+ 880 0534 8695      		lsr r24
+ 881 0536 8770      		andi r24,lo8(7)
+ 882 0538 9B81      		ldd r25,Y+3
+ 883 053a B8E0      		ldi r27,lo8(8)
+ 884 053c 9B9F      		mul r25,r27
+ 885 053e 800D      		add r24,r0
+ 886 0540 1124      		clr __zero_reg__
+ 887 0542 8093 F600 		sts 246,r24
+ 888 0546 8981      		ldd r24,Y+1
+ 889 0548 8295      		swap r24
+ 890 054a 8695      		lsr r24
+ 891 054c 8770      		andi r24,lo8(7)
+ 892 054e 9A81      		ldd r25,Y+2
+ 893 0550 E8E0      		ldi r30,lo8(8)
+ 894 0552 9E9F      		mul r25,r30
+ 895 0554 800D      		add r24,r0
+ 896 0556 1124      		clr __zero_reg__
+ 897 0558 8093 F500 		sts 245,r24
+ 898 055c 8981      		ldd r24,Y+1
+ 899 055e 880F      		lsl r24
+ 900 0560 880F      		lsl r24
+ 901 0562 880F      		lsl r24
+ 902 0564 8093 F400 		sts 244,r24
+ 173:can_lib.c     ****           Can_clear_rtrmsk();
+ 904               	.LM61:
+ 905 0568 9091 EF00 		lds r25,239
+ 906 056c D801      		movw r26,r16
+ 907 056e 1696      		adiw r26,6
+ 908 0570 8C91      		ld r24,X
+ 909 0572 892B      		or r24,r25
+ 910 0574 8093 EF00 		sts 239,r24
+ 174:can_lib.c     ****           Can_set_idemsk();
+ 912               	.LM62:
+ 913 0578 8091 F400 		lds r24,244
+ 914 057c 8B7F      		andi r24,lo8(-5)
+ 915 057e 8093 F400 		sts 244,r24
+ 916 0582 00C0      		rjmp .L64
+ 917               	.L22:
+ 180:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 919               	.LM63:
+ 920 0584 F801      		movw r30,r16
+ 921 0586 8385      		ldd r24,Z+11
+ 922 0588 8823      		tst r24
+ 923 058a 01F0      		breq .L40
+ 180:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 925               	.LM64:
+ 926 058c 8481      		ldd r24,Z+4
+ 927 058e 8295      		swap r24
+ 928 0590 8695      		lsr r24
+ 929 0592 8770      		andi r24,lo8(7)
+ 930 0594 9581      		ldd r25,Z+5
+ 931 0596 F8E0      		ldi r31,lo8(8)
+ 932 0598 9F9F      		mul r25,r31
+ 933 059a 800D      		add r24,r0
+ 934 059c 1124      		clr __zero_reg__
+ 935 059e 8093 F300 		sts 243,r24
+ 936 05a2 D801      		movw r26,r16
+ 937 05a4 1396      		adiw r26,3
+ 938 05a6 8C91      		ld r24,X
+ 939 05a8 1397      		sbiw r26,3
+ 940 05aa 8295      		swap r24
+ 941 05ac 8695      		lsr r24
+ 942 05ae 8770      		andi r24,lo8(7)
+ 943 05b0 1496      		adiw r26,4
+ 944 05b2 9C91      		ld r25,X
+ 945 05b4 B8E0      		ldi r27,lo8(8)
+ 946 05b6 9B9F      		mul r25,r27
+ 947 05b8 800D      		add r24,r0
+ 948 05ba 1124      		clr __zero_reg__
+ 949 05bc 8093 F200 		sts 242,r24
+ 950 05c0 F801      		movw r30,r16
+ 951 05c2 8281      		ldd r24,Z+2
+ 952 05c4 8295      		swap r24
+ 953 05c6 8695      		lsr r24
+ 954 05c8 8770      		andi r24,lo8(7)
+ 955 05ca 9381      		ldd r25,Z+3
+ 956 05cc F8E0      		ldi r31,lo8(8)
+ 957 05ce 9F9F      		mul r25,r31
+ 958 05d0 800D      		add r24,r0
+ 959 05d2 1124      		clr __zero_reg__
+ 960 05d4 8093 F100 		sts 241,r24
+ 961 05d8 D801      		movw r26,r16
+ 962 05da 1296      		adiw r26,2
+ 963 05dc 8C91      		ld r24,X
+ 964 05de 880F      		lsl r24
+ 965 05e0 880F      		lsl r24
+ 966 05e2 880F      		lsl r24
+ 967 05e4 8093 F000 		sts 240,r24
+ 968 05e8 8091 EF00 		lds r24,239
+ 969 05ec 8061      		ori r24,lo8(16)
+ 970 05ee 00C0      		rjmp .L56
+ 971               	.L40:
+ 181:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 973               	.LM65:
+ 974 05f0 F801      		movw r30,r16
+ 975 05f2 8281      		ldd r24,Z+2
+ 976 05f4 8695      		lsr r24
+ 977 05f6 8695      		lsr r24
+ 978 05f8 8695      		lsr r24
+ 979 05fa 9381      		ldd r25,Z+3
+ 980 05fc F0E2      		ldi r31,lo8(32)
+ 981 05fe 9F9F      		mul r25,r31
+ 982 0600 800D      		add r24,r0
+ 983 0602 1124      		clr __zero_reg__
+ 984 0604 8093 F300 		sts 243,r24
+ 985 0608 D801      		movw r26,r16
+ 986 060a 1296      		adiw r26,2
+ 987 060c 8C91      		ld r24,X
+ 988 060e 8295      		swap r24
+ 989 0610 880F      		lsl r24
+ 990 0612 807E      		andi r24,lo8(-32)
+ 991 0614 8093 F200 		sts 242,r24
+ 992 0618 8091 EF00 		lds r24,239
+ 993 061c 8F7E      		andi r24,lo8(-17)
+ 994               	.L56:
+ 995 061e 8093 EF00 		sts 239,r24
+ 182:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 997               	.LM66:
+ 998 0622 8FEF      		ldi r24,lo8(-1)
+ 999 0624 9FEF      		ldi r25,lo8(-1)
+ 1000 0626 DC01      		movw r26,r24
+ 1001 0628 8983      		std Y+1,r24
+ 1002 062a 9A83      		std Y+2,r25
+ 1003 062c AB83      		std Y+3,r26
+ 1004 062e BC83      		std Y+4,r27
+ 1005 0630 8093 F700 		sts 247,r24
+ 1006 0634 8A81      		ldd r24,Y+2
+ 1007 0636 8295      		swap r24
+ 1008 0638 8695      		lsr r24
+ 1009 063a 8770      		andi r24,lo8(7)
+ 1010 063c 9B81      		ldd r25,Y+3
+ 1011 063e B8E0      		ldi r27,lo8(8)
+ 1012 0640 9B9F      		mul r25,r27
+ 1013 0642 800D      		add r24,r0
+ 1014 0644 1124      		clr __zero_reg__
+ 1015 0646 8093 F600 		sts 246,r24
+ 1016 064a 8981      		ldd r24,Y+1
+ 1017 064c 8295      		swap r24
+ 1018 064e 8695      		lsr r24
+ 1019 0650 8770      		andi r24,lo8(7)
+ 1020 0652 9A81      		ldd r25,Y+2
+ 1021 0654 E8E0      		ldi r30,lo8(8)
+ 1022 0656 9E9F      		mul r25,r30
+ 1023 0658 800D      		add r24,r0
+ 1024 065a 1124      		clr __zero_reg__
+ 1025 065c 8093 F500 		sts 245,r24
+ 1026 0660 8981      		ldd r24,Y+1
+ 1027 0662 880F      		lsl r24
+ 1028 0664 880F      		lsl r24
+ 1029 0666 880F      		lsl r24
+ 1030 0668 8093 F400 		sts 244,r24
+ 183:can_lib.c     ****           cmd->ctrl.rtr=0; Can_set_rtrmsk(); Can_clear_rtr();
+ 1032               	.LM67:
+ 1033 066c 9091 EF00 		lds r25,239
+ 1034 0670 D801      		movw r26,r16
+ 1035 0672 1696      		adiw r26,6
+ 1036 0674 8C91      		ld r24,X
+ 1037 0676 1697      		sbiw r26,6
+ 1038 0678 892B      		or r24,r25
+ 1039 067a 8093 EF00 		sts 239,r24
+ 184:can_lib.c     ****           Can_set_idemsk();
+ 1041               	.LM68:
+ 1042 067e 1A96      		adiw r26,10
+ 1043 0680 1C92      		st X,__zero_reg__
+ 1044 0682 8091 F400 		lds r24,244
+ 1045 0686 8460      		ori r24,lo8(4)
+ 1046 0688 8093 F400 		sts 244,r24
+ 1047 068c 8091 F000 		lds r24,240
+ 1048 0690 8B7F      		andi r24,lo8(-5)
+ 1049 0692 8093 F000 		sts 240,r24
+ 1050 0696 00C0      		rjmp .L64
+ 1051               	.L23:
+ 190:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 1053               	.LM69:
+ 1054 0698 F801      		movw r30,r16
+ 1055 069a 8385      		ldd r24,Z+11
+ 1056 069c 8823      		tst r24
+ 1057 069e 01F0      		breq .L42
+ 190:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 1059               	.LM70:
+ 1060 06a0 8481      		ldd r24,Z+4
+ 1061 06a2 8295      		swap r24
+ 1062 06a4 8695      		lsr r24
+ 1063 06a6 8770      		andi r24,lo8(7)
+ 1064 06a8 9581      		ldd r25,Z+5
+ 1065 06aa F8E0      		ldi r31,lo8(8)
+ 1066 06ac 9F9F      		mul r25,r31
+ 1067 06ae 800D      		add r24,r0
+ 1068 06b0 1124      		clr __zero_reg__
+ 1069 06b2 8093 F300 		sts 243,r24
+ 1070 06b6 D801      		movw r26,r16
+ 1071 06b8 1396      		adiw r26,3
+ 1072 06ba 8C91      		ld r24,X
+ 1073 06bc 1397      		sbiw r26,3
+ 1074 06be 8295      		swap r24
+ 1075 06c0 8695      		lsr r24
+ 1076 06c2 8770      		andi r24,lo8(7)
+ 1077 06c4 1496      		adiw r26,4
+ 1078 06c6 9C91      		ld r25,X
+ 1079 06c8 B8E0      		ldi r27,lo8(8)
+ 1080 06ca 9B9F      		mul r25,r27
+ 1081 06cc 800D      		add r24,r0
+ 1082 06ce 1124      		clr __zero_reg__
+ 1083 06d0 8093 F200 		sts 242,r24
+ 1084 06d4 F801      		movw r30,r16
+ 1085 06d6 8281      		ldd r24,Z+2
+ 1086 06d8 8295      		swap r24
+ 1087 06da 8695      		lsr r24
+ 1088 06dc 8770      		andi r24,lo8(7)
+ 1089 06de 9381      		ldd r25,Z+3
+ 1090 06e0 F8E0      		ldi r31,lo8(8)
+ 1091 06e2 9F9F      		mul r25,r31
+ 1092 06e4 800D      		add r24,r0
+ 1093 06e6 1124      		clr __zero_reg__
+ 1094 06e8 8093 F100 		sts 241,r24
+ 1095 06ec D801      		movw r26,r16
+ 1096 06ee 1296      		adiw r26,2
+ 1097 06f0 8C91      		ld r24,X
+ 1098 06f2 880F      		lsl r24
+ 1099 06f4 880F      		lsl r24
+ 1100 06f6 880F      		lsl r24
+ 1101 06f8 8093 F000 		sts 240,r24
+ 1102 06fc 8091 EF00 		lds r24,239
+ 1103 0700 8061      		ori r24,lo8(16)
+ 1104 0702 00C0      		rjmp .L57
+ 1105               	.L42:
+ 191:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 1107               	.LM71:
+ 1108 0704 F801      		movw r30,r16
+ 1109 0706 8281      		ldd r24,Z+2
+ 1110 0708 8695      		lsr r24
+ 1111 070a 8695      		lsr r24
+ 1112 070c 8695      		lsr r24
+ 1113 070e 9381      		ldd r25,Z+3
+ 1114 0710 F0E2      		ldi r31,lo8(32)
+ 1115 0712 9F9F      		mul r25,r31
+ 1116 0714 800D      		add r24,r0
+ 1117 0716 1124      		clr __zero_reg__
+ 1118 0718 8093 F300 		sts 243,r24
+ 1119 071c D801      		movw r26,r16
+ 1120 071e 1296      		adiw r26,2
+ 1121 0720 8C91      		ld r24,X
+ 1122 0722 8295      		swap r24
+ 1123 0724 880F      		lsl r24
+ 1124 0726 807E      		andi r24,lo8(-32)
+ 1125 0728 8093 F200 		sts 242,r24
+ 1126 072c 8091 EF00 		lds r24,239
+ 1127 0730 8F7E      		andi r24,lo8(-17)
+ 1128               	.L57:
+ 1129 0732 8093 EF00 		sts 239,r24
+ 192:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 1131               	.LM72:
+ 1132 0736 8FEF      		ldi r24,lo8(-1)
+ 1133 0738 9FEF      		ldi r25,lo8(-1)
+ 1134 073a DC01      		movw r26,r24
+ 1135 073c 8983      		std Y+1,r24
+ 1136 073e 9A83      		std Y+2,r25
+ 1137 0740 AB83      		std Y+3,r26
+ 1138 0742 BC83      		std Y+4,r27
+ 1139 0744 8093 F700 		sts 247,r24
+ 1140 0748 8A81      		ldd r24,Y+2
+ 1141 074a 8295      		swap r24
+ 1142 074c 8695      		lsr r24
+ 1143 074e 8770      		andi r24,lo8(7)
+ 1144 0750 9B81      		ldd r25,Y+3
+ 1145 0752 B8E0      		ldi r27,lo8(8)
+ 1146 0754 9B9F      		mul r25,r27
+ 1147 0756 800D      		add r24,r0
+ 1148 0758 1124      		clr __zero_reg__
+ 1149 075a 8093 F600 		sts 246,r24
+ 1150 075e 8981      		ldd r24,Y+1
+ 1151 0760 8295      		swap r24
+ 1152 0762 8695      		lsr r24
+ 1153 0764 8770      		andi r24,lo8(7)
+ 1154 0766 9A81      		ldd r25,Y+2
+ 1155 0768 E8E0      		ldi r30,lo8(8)
+ 1156 076a 9E9F      		mul r25,r30
+ 1157 076c 800D      		add r24,r0
+ 1158 076e 1124      		clr __zero_reg__
+ 1159 0770 8093 F500 		sts 245,r24
+ 1160 0774 8981      		ldd r24,Y+1
+ 1161 0776 880F      		lsl r24
+ 1162 0778 880F      		lsl r24
+ 1163 077a 880F      		lsl r24
+ 1164 077c 8093 F400 		sts 244,r24
+ 193:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 1166               	.LM73:
+ 1167 0780 9091 EF00 		lds r25,239
+ 1168 0784 D801      		movw r26,r16
+ 1169 0786 1696      		adiw r26,6
+ 1170 0788 8C91      		ld r24,X
+ 1171 078a 1697      		sbiw r26,6
+ 1172 078c 892B      		or r24,r25
+ 1173 078e 8093 EF00 		sts 239,r24
+ 194:can_lib.c     ****           Can_clear_rplv();
+ 1175               	.LM74:
+ 1176 0792 81E0      		ldi r24,lo8(1)
+ 1177 0794 1A96      		adiw r26,10
+ 1178 0796 8C93      		st X,r24
+ 1179 0798 8091 F400 		lds r24,244
+ 1180 079c 8460      		ori r24,lo8(4)
+ 1181 079e 8093 F400 		sts 244,r24
+ 1182 07a2 8091 F000 		lds r24,240
+ 1183 07a6 8460      		ori r24,lo8(4)
+ 1184 07a8 8093 F000 		sts 240,r24
+ 195:can_lib.c     ****           Can_set_idemsk();
+ 1186               	.LM75:
+ 1187 07ac 8091 EF00 		lds r24,239
+ 1188 07b0 8F7D      		andi r24,lo8(-33)
+ 1189 07b2 00C0      		rjmp .L65
+ 1190               	.L49:
+ 114:can_lib.c     ****       {
+ 1192               	.LM76:
+ 1193 07b4 80E0      		ldi r24,0
+ 1194               	.L24:
+ 201:can_lib.c     ****           u32_temp=0; Can_set_ext_msk(u32_temp);
+ 1196               	.LM77:
+ 1197 07b6 F801      		movw r30,r16
+ 1198 07b8 9681      		ldd r25,Z+6
+ 1199 07ba 8917      		cp r24,r25
+ 1200 07bc 00F4      		brsh .L71
+ 201:can_lib.c     ****           u32_temp=0; Can_set_ext_msk(u32_temp);
+ 1202               	.LM78:
+ 1203 07be D801      		movw r26,r16
+ 1204 07c0 1796      		adiw r26,7
+ 1205 07c2 ED91      		ld r30,X+
+ 1206 07c4 FC91      		ld r31,X
+ 1207 07c6 1897      		sbiw r26,7+1
+ 1208 07c8 E80F      		add r30,r24
+ 1209 07ca F11D      		adc r31,__zero_reg__
+ 1210 07cc 9081      		ld r25,Z
+ 1211 07ce 9093 FA00 		sts 250,r25
+ 1212 07d2 8F5F      		subi r24,lo8(-(1))
+ 1213 07d4 00C0      		rjmp .L24
+ 1214               	.L71:
+ 202:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 1216               	.LM79:
+ 1217 07d6 1982      		std Y+1,__zero_reg__
+ 1218 07d8 1A82      		std Y+2,__zero_reg__
+ 1219 07da 1B82      		std Y+3,__zero_reg__
+ 1220 07dc 1C82      		std Y+4,__zero_reg__
+ 1221 07de 1092 F700 		sts 247,__zero_reg__
+ 1222 07e2 8A81      		ldd r24,Y+2
+ 1223 07e4 8295      		swap r24
+ 1224 07e6 8695      		lsr r24
+ 1225 07e8 8770      		andi r24,lo8(7)
+ 1226 07ea 9B81      		ldd r25,Y+3
+ 1227 07ec F8E0      		ldi r31,lo8(8)
+ 1228 07ee 9F9F      		mul r25,r31
+ 1229 07f0 800D      		add r24,r0
+ 1230 07f2 1124      		clr __zero_reg__
+ 1231 07f4 8093 F600 		sts 246,r24
+ 1232 07f8 8981      		ldd r24,Y+1
+ 1233 07fa 8295      		swap r24
+ 1234 07fc 8695      		lsr r24
+ 1235 07fe 8770      		andi r24,lo8(7)
+ 1236 0800 9A81      		ldd r25,Y+2
+ 1237 0802 28E0      		ldi r18,lo8(8)
+ 1238 0804 929F      		mul r25,r18
+ 1239 0806 800D      		add r24,r0
+ 1240 0808 1124      		clr __zero_reg__
+ 1241 080a 8093 F500 		sts 245,r24
+ 1242 080e 8981      		ldd r24,Y+1
+ 1243 0810 880F      		lsl r24
+ 1244 0812 880F      		lsl r24
+ 1245 0814 880F      		lsl r24
+ 1246 0816 8093 F400 		sts 244,r24
+ 203:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 1248               	.LM80:
+ 1249 081a 9091 EF00 		lds r25,239
+ 1250 081e D801      		movw r26,r16
+ 1251 0820 1696      		adiw r26,6
+ 1252 0822 8C91      		ld r24,X
+ 1253 0824 1697      		sbiw r26,6
+ 1254 0826 892B      		or r24,r25
+ 1255 0828 8093 EF00 		sts 239,r24
+ 204:can_lib.c     ****           Can_set_rplv();
+ 1257               	.LM81:
+ 1258 082c 81E0      		ldi r24,lo8(1)
+ 1259 082e 1A96      		adiw r26,10
+ 1260 0830 8C93      		st X,r24
+ 1261 0832 8091 F400 		lds r24,244
+ 1262 0836 8460      		ori r24,lo8(4)
+ 1263 0838 8093 F400 		sts 244,r24
+ 1264 083c 8091 F000 		lds r24,240
+ 1265 0840 8460      		ori r24,lo8(4)
+ 1266 0842 8093 F000 		sts 240,r24
+ 205:can_lib.c     ****           Can_clear_idemsk();
+ 1268               	.LM82:
+ 1269 0846 8091 EF00 		lds r24,239
+ 1270 084a 8062      		ori r24,lo8(32)
+ 1271               	.L68:
+ 1272 084c 8093 EF00 		sts 239,r24
+ 1273               	.L67:
+ 206:can_lib.c     ****           Can_config_rx();       
+ 1275               	.LM83:
+ 1276 0850 8091 F400 		lds r24,244
+ 1277 0854 8E7F      		andi r24,lo8(-2)
+ 1278 0856 00C0      		rjmp .L63
+ 1279               	.L25:
+ 211:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 1281               	.LM84:
+ 1282 0858 F801      		movw r30,r16
+ 1283 085a 8385      		ldd r24,Z+11
+ 1284 085c 8823      		tst r24
+ 1285 085e 01F0      		breq .L45
+ 211:can_lib.c     ****           else              { Can_set_std_id(cmd->id.std);}
+ 1287               	.LM85:
+ 1288 0860 8481      		ldd r24,Z+4
+ 1289 0862 8295      		swap r24
+ 1290 0864 8695      		lsr r24
+ 1291 0866 8770      		andi r24,lo8(7)
+ 1292 0868 9581      		ldd r25,Z+5
+ 1293 086a F8E0      		ldi r31,lo8(8)
+ 1294 086c 9F9F      		mul r25,r31
+ 1295 086e 800D      		add r24,r0
+ 1296 0870 1124      		clr __zero_reg__
+ 1297 0872 8093 F300 		sts 243,r24
+ 1298 0876 D801      		movw r26,r16
+ 1299 0878 1396      		adiw r26,3
+ 1300 087a 8C91      		ld r24,X
+ 1301 087c 1397      		sbiw r26,3
+ 1302 087e 8295      		swap r24
+ 1303 0880 8695      		lsr r24
+ 1304 0882 8770      		andi r24,lo8(7)
+ 1305 0884 1496      		adiw r26,4
+ 1306 0886 9C91      		ld r25,X
+ 1307 0888 B8E0      		ldi r27,lo8(8)
+ 1308 088a 9B9F      		mul r25,r27
+ 1309 088c 800D      		add r24,r0
+ 1310 088e 1124      		clr __zero_reg__
+ 1311 0890 8093 F200 		sts 242,r24
+ 1312 0894 F801      		movw r30,r16
+ 1313 0896 8281      		ldd r24,Z+2
+ 1314 0898 8295      		swap r24
+ 1315 089a 8695      		lsr r24
+ 1316 089c 8770      		andi r24,lo8(7)
+ 1317 089e 9381      		ldd r25,Z+3
+ 1318 08a0 F8E0      		ldi r31,lo8(8)
+ 1319 08a2 9F9F      		mul r25,r31
+ 1320 08a4 800D      		add r24,r0
+ 1321 08a6 1124      		clr __zero_reg__
+ 1322 08a8 8093 F100 		sts 241,r24
+ 1323 08ac D801      		movw r26,r16
+ 1324 08ae 1296      		adiw r26,2
+ 1325 08b0 8C91      		ld r24,X
+ 1326 08b2 880F      		lsl r24
+ 1327 08b4 880F      		lsl r24
+ 1328 08b6 880F      		lsl r24
+ 1329 08b8 8093 F000 		sts 240,r24
+ 1330 08bc 8091 EF00 		lds r24,239
+ 1331 08c0 8061      		ori r24,lo8(16)
+ 1332 08c2 00C0      		rjmp .L58
+ 1333               	.L45:
+ 212:can_lib.c     ****           for (cpt=0;cpt<cmd->dlc;cpt++) CANMSG = *(cmd->pt_data + cpt);
+ 1335               	.LM86:
+ 1336 08c4 F801      		movw r30,r16
+ 1337 08c6 8281      		ldd r24,Z+2
+ 1338 08c8 8695      		lsr r24
+ 1339 08ca 8695      		lsr r24
+ 1340 08cc 8695      		lsr r24
+ 1341 08ce 9381      		ldd r25,Z+3
+ 1342 08d0 F0E2      		ldi r31,lo8(32)
+ 1343 08d2 9F9F      		mul r25,r31
+ 1344 08d4 800D      		add r24,r0
+ 1345 08d6 1124      		clr __zero_reg__
+ 1346 08d8 8093 F300 		sts 243,r24
+ 1347 08dc D801      		movw r26,r16
+ 1348 08de 1296      		adiw r26,2
+ 1349 08e0 8C91      		ld r24,X
+ 1350 08e2 8295      		swap r24
+ 1351 08e4 880F      		lsl r24
+ 1352 08e6 807E      		andi r24,lo8(-32)
+ 1353 08e8 8093 F200 		sts 242,r24
+ 1354 08ec 8091 EF00 		lds r24,239
+ 1355 08f0 8F7E      		andi r24,lo8(-17)
+ 1356               	.L58:
+ 1357 08f2 8093 EF00 		sts 239,r24
+ 114:can_lib.c     ****       {
+ 1359               	.LM87:
+ 1360 08f6 80E0      		ldi r24,0
+ 1361               	.L47:
+ 213:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 1363               	.LM88:
+ 1364 08f8 F801      		movw r30,r16
+ 1365 08fa 9681      		ldd r25,Z+6
+ 1366 08fc 8917      		cp r24,r25
+ 1367 08fe 00F4      		brsh .L72
+ 213:can_lib.c     ****           u32_temp=~0; Can_set_ext_msk(u32_temp);
+ 1369               	.LM89:
+ 1370 0900 D801      		movw r26,r16
+ 1371 0902 1796      		adiw r26,7
+ 1372 0904 ED91      		ld r30,X+
+ 1373 0906 FC91      		ld r31,X
+ 1374 0908 1897      		sbiw r26,7+1
+ 1375 090a E80F      		add r30,r24
+ 1376 090c F11D      		adc r31,__zero_reg__
+ 1377 090e 9081      		ld r25,Z
+ 1378 0910 9093 FA00 		sts 250,r25
+ 1379 0914 8F5F      		subi r24,lo8(-(1))
+ 1380 0916 00C0      		rjmp .L47
+ 1381               	.L72:
+ 214:can_lib.c     ****           Can_set_dlc(cmd->dlc);
+ 1383               	.LM90:
+ 1384 0918 8FEF      		ldi r24,lo8(-1)
+ 1385 091a 9FEF      		ldi r25,lo8(-1)
+ 1386 091c DC01      		movw r26,r24
+ 1387 091e 8983      		std Y+1,r24
+ 1388 0920 9A83      		std Y+2,r25
+ 1389 0922 AB83      		std Y+3,r26
+ 1390 0924 BC83      		std Y+4,r27
+ 1391 0926 8093 F700 		sts 247,r24
+ 1392 092a 8A81      		ldd r24,Y+2
+ 1393 092c 8295      		swap r24
+ 1394 092e 8695      		lsr r24
+ 1395 0930 8770      		andi r24,lo8(7)
+ 1396 0932 9B81      		ldd r25,Y+3
+ 1397 0934 F8E0      		ldi r31,lo8(8)
+ 1398 0936 9F9F      		mul r25,r31
+ 1399 0938 800D      		add r24,r0
+ 1400 093a 1124      		clr __zero_reg__
+ 1401 093c 8093 F600 		sts 246,r24
+ 1402 0940 8981      		ldd r24,Y+1
+ 1403 0942 8295      		swap r24
+ 1404 0944 8695      		lsr r24
+ 1405 0946 8770      		andi r24,lo8(7)
+ 1406 0948 9A81      		ldd r25,Y+2
+ 1407 094a 28E0      		ldi r18,lo8(8)
+ 1408 094c 929F      		mul r25,r18
+ 1409 094e 800D      		add r24,r0
+ 1410 0950 1124      		clr __zero_reg__
+ 1411 0952 8093 F500 		sts 245,r24
+ 1412 0956 8981      		ldd r24,Y+1
+ 1413 0958 880F      		lsl r24
+ 1414 095a 880F      		lsl r24
+ 1415 095c 880F      		lsl r24
+ 1416 095e 8093 F400 		sts 244,r24
+ 215:can_lib.c     ****           cmd->ctrl.rtr=1; Can_set_rtrmsk(); Can_set_rtr();
+ 1418               	.LM91:
+ 1419 0962 9091 EF00 		lds r25,239
+ 1420 0966 D801      		movw r26,r16
+ 1421 0968 1696      		adiw r26,6
+ 1422 096a 8C91      		ld r24,X
+ 1423 096c 1697      		sbiw r26,6
+ 1424 096e 892B      		or r24,r25
+ 1425 0970 8093 EF00 		sts 239,r24
+ 216:can_lib.c     ****           Can_set_rplv();
+ 1427               	.LM92:
+ 1428 0974 81E0      		ldi r24,lo8(1)
+ 1429 0976 1A96      		adiw r26,10
+ 1430 0978 8C93      		st X,r24
+ 1431 097a 8091 F400 		lds r24,244
+ 1432 097e 8460      		ori r24,lo8(4)
+ 1433 0980 8093 F400 		sts 244,r24
+ 1434 0984 8091 F000 		lds r24,240
+ 1435 0988 8460      		ori r24,lo8(4)
+ 1436 098a 8093 F000 		sts 240,r24
+ 217:can_lib.c     ****           Can_set_idemsk();
+ 1438               	.LM93:
+ 1439 098e 8091 EF00 		lds r24,239
+ 1440 0992 8062      		ori r24,lo8(32)
+ 1441               	.L65:
+ 1442 0994 8093 EF00 		sts 239,r24
+ 1443               	.L64:
+ 218:can_lib.c     ****           Can_config_rx();       
+ 1445               	.LM94:
+ 1446 0998 8091 F400 		lds r24,244
+ 1447 099c 8160      		ori r24,lo8(1)
+ 1448               	.L63:
+ 1449 099e 8093 F400 		sts 244,r24
+ 219:can_lib.c     ****           break;
+ 1451               	.LM95:
+ 1452 09a2 8091 EF00 		lds r24,239
+ 1453 09a6 8F73      		andi r24,lo8(63)
+ 1454 09a8 8093 EF00 		sts 239,r24
+ 1455 09ac 8091 EF00 		lds r24,239
+ 1456 09b0 8068      		ori r24,lo8(-128)
+ 1457 09b2 00C0      		rjmp .L61
+ 1458               	.L13:
+ 224:can_lib.c     ****           break;
+ 1460               	.LM96:
+ 1461 09b4 F801      		movw r30,r16
+ 1462               	.L66:
+ 1463 09b6 1186      		std Z+9,__zero_reg__
+ 1464 09b8 00C0      		rjmp .L60
+ 1465               	.L11:
+ 231:can_lib.c     ****       return CAN_CMD_REFUSED;
+ 1467               	.LM97:
+ 1468 09ba 8FE1      		ldi r24,lo8(31)
+ 1469 09bc D801      		movw r26,r16
+ 1470 09be 1996      		adiw r26,9
+ 1471 09c0 8C93      		st X,r24
+ 232:can_lib.c     ****     }
+ 1473               	.LM98:
+ 1474 09c2 8FEF      		ldi r24,lo8(-1)
+ 1475               	.L10:
+ 1476               	/* epilogue start */
+ 236:can_lib.c     **** }
+ 1478               	.LM99:
+ 1479 09c4 0F90      		pop __tmp_reg__
+ 1480 09c6 0F90      		pop __tmp_reg__
+ 1481 09c8 0F90      		pop __tmp_reg__
+ 1482 09ca 0F90      		pop __tmp_reg__
+ 1483 09cc DF91      		pop r29
+ 1484 09ce CF91      		pop r28
+ 1485 09d0 1F91      		pop r17
+ 1486 09d2 0F91      		pop r16
+ 1487 09d4 0895      		ret
+ 1502               	.Lscope2:
+ 1505               	.global	can_get_status
+ 1507               	can_get_status:
+ 237:can_lib.c     **** 
+ 238:can_lib.c     **** //------------------------------------------------------------------------------
+ 239:can_lib.c     **** //  @fn can_get_status
+ 240:can_lib.c     **** //!
+ 241:can_lib.c     **** //! This function allows to return if the command has been performed or not.
+ 242:can_lib.c     **** //! In an reception case, all the CAN message is stored in the structure.
+ 243:can_lib.c     **** //! This function also updates the CAN descriptor status (MOB_TX_COMPLETED,    
+ 244:can_lib.c     **** //!  MOB_RX_COMPLETED, MOB_RX_COMPLETED_DLCW or MOB_???_ERROR).         
+ 245:can_lib.c     **** //!
+ 246:can_lib.c     **** //! @param  st_cmd_t* pointer on CAN descriptor structure.
+ 247:can_lib.c     **** //!
+ 248:can_lib.c     **** //! @return CAN_STATUS_COMPLETED     - Rx or Tx is completed
+ 249:can_lib.c     **** //!         CAN_STATUS_NOT_COMPLETED - Rx or Tx is not completed
+ 250:can_lib.c     **** //!         CAN_STATUS_ERROR         - Error in configuration or in the
+ 251:can_lib.c     **** //!                                    CAN communication
+ 252:can_lib.c     **** //!
+ 253:can_lib.c     **** //------------------------------------------------------------------------------
+ 254:can_lib.c     **** uint8_t can_get_status (st_cmd_t* cmd)
+ 255:can_lib.c     **** {
+ 1509               	.LM100:
+ 1510               	.LFBB3:
+ 1511 09d6 1F93      		push r17
+ 1512 09d8 CF93      		push r28
+ 1513 09da DF93      		push r29
+ 1514               	/* prologue: function */
+ 1515               	/* frame size = 0 */
+ 1516               	/* stack size = 3 */
+ 1517               	.L__stack_usage = 3
+ 1518 09dc EC01      		movw r28,r24
+ 256:can_lib.c     ****     uint8_t a_status, rtn_val;
+ 257:can_lib.c     ****      
+ 258:can_lib.c     ****     a_status = cmd->status;
+ 1520               	.LM101:
+ 1521 09de 9985      		ldd r25,Y+9
+ 259:can_lib.c     ****     if ((a_status==STATUS_CLEARED)||(a_status==MOB_NOT_REACHED)||(a_status==MOB_DISABLE))
+ 1523               	.LM102:
+ 1524 09e0 9923      		tst r25
+ 1525 09e2 01F4      		brne .+2
+ 1526 09e4 00C0      		rjmp .L83
+ 1528               	.LM103:
+ 1529 09e6 9F31      		cpi r25,lo8(31)
+ 1530 09e8 01F4      		brne .+2
+ 1531 09ea 00C0      		rjmp .L83
+ 1533               	.LM104:
+ 1534 09ec 9F3F      		cpi r25,lo8(-1)
+ 1535 09ee 01F4      		brne .+2
+ 1536 09f0 00C0      		rjmp .L83
+ 260:can_lib.c     ****     {
+ 261:can_lib.c     ****         return CAN_STATUS_ERROR;
+ 262:can_lib.c     ****     }
+ 263:can_lib.c     **** 
+ 264:can_lib.c     ****     Can_set_mob(cmd->handle);
+ 1538               	.LM105:
+ 1539 09f2 8881      		ld r24,Y
+ 1540 09f4 8295      		swap r24
+ 1541 09f6 807F      		andi r24,lo8(-16)
+ 1542 09f8 8093 ED00 		sts 237,r24
+ 265:can_lib.c     ****     a_status = can_get_mob_status();
+ 1544               	.LM106:
+ 1545 09fc 0E94 0000 		call can_get_mob_status
+ 1546 0a00 182F      		mov r17,r24
+ 266:can_lib.c     ****     
+ 267:can_lib.c     ****     switch (a_status)
+ 1548               	.LM107:
+ 1549 0a02 8032      		cpi r24,lo8(32)
+ 1550 0a04 01F0      		breq .L76
+ 1551 0a06 00F4      		brsh .L77
+ 1552 0a08 8823      		tst r24
+ 1553 0a0a 01F4      		brne .+2
+ 1554 0a0c 00C0      		rjmp .L84
+ 1555 0a0e 00C0      		rjmp .L75
+ 1556               	.L77:
+ 1557 0a10 8034      		cpi r24,lo8(64)
+ 1558 0a12 01F4      		brne .+2
+ 1559 0a14 00C0      		rjmp .L78
+ 1560 0a16 803A      		cpi r24,lo8(-96)
+ 1561 0a18 01F0      		breq .+2
+ 1562 0a1a 00C0      		rjmp .L75
+ 1563               	.L76:
+ 268:can_lib.c     ****     {
+ 269:can_lib.c     ****         case MOB_NOT_COMPLETED:
+ 270:can_lib.c     ****             // cmd->status not updated
+ 271:can_lib.c     ****             rtn_val = CAN_STATUS_NOT_COMPLETED;
+ 272:can_lib.c     ****             break;
+ 273:can_lib.c     ****         //---------------      
+ 274:can_lib.c     ****         case MOB_RX_COMPLETED:     
+ 275:can_lib.c     ****         case MOB_RX_COMPLETED_DLCW:
+ 276:can_lib.c     ****             cmd->dlc = Can_get_dlc();
+ 1565               	.LM108:
+ 1566 0a1c 8091 EF00 		lds r24,239
+ 1567 0a20 8F70      		andi r24,lo8(15)
+ 1568 0a22 8E83      		std Y+6,r24
+ 277:can_lib.c     ****             can_get_data(cmd->pt_data);
+ 1570               	.LM109:
+ 1571 0a24 8F81      		ldd r24,Y+7
+ 1572 0a26 9885      		ldd r25,Y+8
+ 1573 0a28 0E94 0000 		call can_get_data
+ 278:can_lib.c     ****             cmd->ctrl.rtr = Can_get_rtr();
+ 1575               	.LM110:
+ 1576 0a2c 8091 F000 		lds r24,240
+ 1577 0a30 82FB      		bst r24,2
+ 1578 0a32 8827      		clr r24
+ 1579 0a34 80F9      		bld r24,0
+ 1580 0a36 8A87      		std Y+10,r24
+ 279:can_lib.c     ****             if (Can_get_ide()) // if extended frame
+ 1582               	.LM111:
+ 1583 0a38 8091 EF00 		lds r24,239
+ 1584 0a3c 84FF      		sbrs r24,4
+ 1585 0a3e 00C0      		rjmp .L79
+ 280:can_lib.c     ****             {
+ 281:can_lib.c     ****                 cmd->ctrl.ide = 1; // extended frame
+ 1587               	.LM112:
+ 1588 0a40 81E0      		ldi r24,lo8(1)
+ 1589 0a42 8B87      		std Y+11,r24
+ 282:can_lib.c     ****                 Can_get_ext_id(cmd->id.ext);
+ 1591               	.LM113:
+ 1592 0a44 8091 F300 		lds r24,243
+ 1593 0a48 8695      		lsr r24
+ 1594 0a4a 8695      		lsr r24
+ 1595 0a4c 8695      		lsr r24
+ 1596 0a4e 8D83      		std Y+5,r24
+ 1597 0a50 8091 F200 		lds r24,242
+ 1598 0a54 9091 F300 		lds r25,243
+ 1599 0a58 8695      		lsr r24
+ 1600 0a5a 8695      		lsr r24
+ 1601 0a5c 8695      		lsr r24
+ 1602 0a5e 20E2      		ldi r18,lo8(32)
+ 1603 0a60 929F      		mul r25,r18
+ 1604 0a62 800D      		add r24,r0
+ 1605 0a64 1124      		clr __zero_reg__
+ 1606 0a66 8C83      		std Y+4,r24
+ 1607 0a68 8091 F100 		lds r24,241
+ 1608 0a6c 9091 F200 		lds r25,242
+ 1609 0a70 8695      		lsr r24
+ 1610 0a72 8695      		lsr r24
+ 1611 0a74 8695      		lsr r24
+ 1612 0a76 20E2      		ldi r18,lo8(32)
+ 1613 0a78 929F      		mul r25,r18
+ 1614 0a7a 800D      		add r24,r0
+ 1615 0a7c 1124      		clr __zero_reg__
+ 1616 0a7e 8B83      		std Y+3,r24
+ 1617 0a80 8091 F000 		lds r24,240
+ 1618 0a84 9091 F100 		lds r25,241
+ 1619 0a88 8695      		lsr r24
+ 1620 0a8a 8695      		lsr r24
+ 1621 0a8c 8695      		lsr r24
+ 1622 0a8e 20E2      		ldi r18,lo8(32)
+ 1623 0a90 00C0      		rjmp .L91
+ 1624               	.L79:
+ 283:can_lib.c     ****             }
+ 284:can_lib.c     ****             else // else standard frame
+ 285:can_lib.c     ****                 {
+ 286:can_lib.c     ****                     cmd->ctrl.ide = 0;
+ 1626               	.LM114:
+ 1627 0a92 1B86      		std Y+11,__zero_reg__
+ 287:can_lib.c     ****                     Can_get_std_id(cmd->id.std);
+ 1629               	.LM115:
+ 1630 0a94 8091 F300 		lds r24,243
+ 1631 0a98 8295      		swap r24
+ 1632 0a9a 8695      		lsr r24
+ 1633 0a9c 8770      		andi r24,lo8(7)
+ 1634 0a9e 8B83      		std Y+3,r24
+ 1635 0aa0 8091 F200 		lds r24,242
+ 1636 0aa4 9091 F300 		lds r25,243
+ 1637 0aa8 8295      		swap r24
+ 1638 0aaa 8695      		lsr r24
+ 1639 0aac 8770      		andi r24,lo8(7)
+ 1640 0aae 28E0      		ldi r18,lo8(8)
+ 1641               	.L91:
+ 1642 0ab0 929F      		mul r25,r18
+ 1643 0ab2 800D      		add r24,r0
+ 1644 0ab4 1124      		clr __zero_reg__
+ 1645 0ab6 8A83      		std Y+2,r24
+ 1646               	.L78:
+ 288:can_lib.c     ****                 }
+ 289:can_lib.c     ****             // Status field of descriptor: 0x20 if Rx completed
+ 290:can_lib.c     ****             // Status field of descriptor: 0xA0 if Rx completed with DLCWarning    
+ 291:can_lib.c     ****             cmd->status = a_status;
+ 292:can_lib.c     ****             Can_mob_abort();        // Freed the MOB
+ 293:can_lib.c     ****             Can_clear_status_mob(); //   and reset MOb status
+ 294:can_lib.c     ****             rtn_val = CAN_STATUS_COMPLETED;
+ 295:can_lib.c     ****             break;
+ 296:can_lib.c     ****         //---------------      
+ 297:can_lib.c     ****         case MOB_TX_COMPLETED:     
+ 298:can_lib.c     ****             // Status field of descriptor: 0x40 if Tx completed
+ 299:can_lib.c     ****             cmd->status = a_status;
+ 1648               	.LM116:
+ 1649 0ab8 1987      		std Y+9,r17
+ 300:can_lib.c     ****             Can_mob_abort();        // Freed the MOB
+ 1651               	.LM117:
+ 1652 0aba 8091 EF00 		lds r24,239
+ 1653 0abe 8F73      		andi r24,lo8(63)
+ 1654 0ac0 8093 EF00 		sts 239,r24
+ 301:can_lib.c     ****             Can_clear_status_mob(); //   and reset MOb status
+ 1656               	.LM118:
+ 1657 0ac4 1092 EE00 		sts 238,__zero_reg__
+ 302:can_lib.c     ****             rtn_val = CAN_STATUS_COMPLETED;
+ 1659               	.LM119:
+ 1660 0ac8 80E0      		ldi r24,0
+ 303:can_lib.c     ****             break;
+ 1662               	.LM120:
+ 1663 0aca 00C0      		rjmp .L74
+ 1664               	.L75:
+ 304:can_lib.c     ****         //---------------      
+ 305:can_lib.c     ****         default:
+ 306:can_lib.c     ****             // Status field of descriptor: (bin)000b.scfa if MOb error
+ 307:can_lib.c     ****             cmd->status = a_status;
+ 1666               	.LM121:
+ 1667 0acc 1987      		std Y+9,r17
+ 308:can_lib.c     ****             Can_mob_abort();        // Freed the MOB
+ 1669               	.LM122:
+ 1670 0ace 8091 EF00 		lds r24,239
+ 1671 0ad2 8F73      		andi r24,lo8(63)
+ 1672 0ad4 8093 EF00 		sts 239,r24
+ 309:can_lib.c     ****             Can_clear_status_mob(); //   and reset MOb status
+ 1674               	.LM123:
+ 1675 0ad8 1092 EE00 		sts 238,__zero_reg__
+ 1676               	.L83:
+ 261:can_lib.c     ****     }
+ 1678               	.LM124:
+ 1679 0adc 82E0      		ldi r24,lo8(2)
+ 1680 0ade 00C0      		rjmp .L74
+ 1681               	.L84:
+ 271:can_lib.c     ****             break;
+ 1683               	.LM125:
+ 1684 0ae0 81E0      		ldi r24,lo8(1)
+ 1685               	.L74:
+ 1686               	/* epilogue start */
+ 310:can_lib.c     ****             rtn_val = CAN_STATUS_ERROR;
+ 311:can_lib.c     ****             break;
+ 312:can_lib.c     ****              
+ 313:can_lib.c     ****     } // switch (a_status...
+ 314:can_lib.c     ****  
+ 315:can_lib.c     ****     return (rtn_val);
+ 316:can_lib.c     **** }
+ 1688               	.LM126:
+ 1689 0ae2 DF91      		pop r29
+ 1690 0ae4 CF91      		pop r28
+ 1691 0ae6 1F91      		pop r17
+ 1692 0ae8 0895      		ret
+ 1694               	.Lscope3:
+ 1696               	.Letext0:
+ 1697               		.ident	"GCC: (GNU) 4.9.2"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 can_lib.c
+     /tmp/ccAHtB3q.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccAHtB3q.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccAHtB3q.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccAHtB3q.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccAHtB3q.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccAHtB3q.s:119    .text:0000000000000000 can_init
+     /tmp/ccAHtB3q.s:153    .text:000000000000001a can_cmd
+     /tmp/ccAHtB3q.s:1507   .text:00000000000009d6 can_get_status
+
+UNDEFINED SYMBOLS
+can_fixed_baudrate
+can_clear_all_mob
+can_get_mob_free
+__tablejump2__
+can_get_mob_status
+can_get_data

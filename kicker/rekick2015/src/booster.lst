@@ -1,0 +1,1836 @@
+   1               		.file	"booster.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 132               	.global	booster_reset
+ 134               	booster_reset:
+   1:booster.c     **** /*
+   2:booster.c     ****  * booster.c
+   3:booster.c     ****  *
+   4:booster.c     ****  *  Created on: Sep 12, 2016
+   5:booster.c     ****  *      Author: Carpe Noctem
+   6:booster.c     ****  */
+   7:booster.c     **** 
+   8:booster.c     **** #include "booster.h"
+   9:booster.c     **** #include "messages.h"
+  10:booster.c     **** 
+  11:booster.c     **** #include "defaults.h"
+  12:booster.c     **** #include "global.h"
+  13:booster.c     **** 
+  14:booster.c     **** #include <util/delay.h>
+  15:booster.c     **** #include <string.h>
+  16:booster.c     **** 
+  17:booster.c     **** enum eState {
+  18:booster.c     **** 	State_Deactivated = 0x00,
+  19:booster.c     **** 	State_Error = 0x01,
+  20:booster.c     **** 	State_Error_CAP_OVLO = 0x02,		// Over Voltage Lock Out
+  21:booster.c     **** 	State_Activated = 0x10,
+  22:booster.c     **** 	State_ActivatedHold = 0x11,
+  23:booster.c     **** 	State_ActivatedKicking = 0x12,
+  24:booster.c     **** 	State_VoltageLow = 0x20,
+  25:booster.c     **** 	State_VoltageLowLogic = 0x21,
+  26:booster.c     **** 	State_VoltageLowBooster = 0x22,
+  27:booster.c     **** 	State_EmergencyShutdown = 0xE0,
+  28:booster.c     **** 	State_EmergencyTriggered = 0xE1,
+  29:booster.c     **** 	State_EmergencyReset = 0xEE,
+  30:booster.c     **** 
+  31:booster.c     **** 	// These States should never be reached
+  32:booster.c     **** 	State_False = 0xF0,
+  33:booster.c     **** 	State_FalseKick = 0xF1,
+  34:booster.c     **** };
+  35:booster.c     **** 
+  36:booster.c     **** /**
+  37:booster.c     ****  * This structure builds the info message
+  38:booster.c     ****  *
+  39:booster.c     ****  * 5 bytes long
+  40:booster.c     ****  */
+  41:booster.c     **** struct BOOSTER_INFO {
+  42:booster.c     **** 	enum eState state;					//< the state of the booster
+  43:booster.c     **** 	uint16_t supply_voltage;		//< the adc value of the supply voltage (Volt)
+  44:booster.c     **** 	uint16_t capacitors_voltage;	//< the adc voltage of the capacitors (Volt)
+  45:booster.c     **** };
+  46:booster.c     **** 
+  47:booster.c     **** 
+  48:booster.c     **** volatile uint16_t adc_logic_raw = 0;
+  49:booster.c     **** volatile uint16_t adc_booster_raw = 0;
+  50:booster.c     **** volatile uint16_t adc_capacitor_raw = 0;
+  51:booster.c     **** 
+  52:booster.c     **** enum eMode mode;
+  53:booster.c     **** uint16_t desired_voltage = 330.0;
+  54:booster.c     **** uint32_t last_heartbeat = 0;
+  55:booster.c     **** 
+  56:booster.c     **** 
+  57:booster.c     **** void booster_init()
+  58:booster.c     **** {
+  59:booster.c     **** 	SET_OUTPUT(RESET_NOTAUS);
+  60:booster.c     **** 	RESET(RESET_NOTAUS);
+  61:booster.c     **** 	SET_INPUT(NOTAUS);
+  62:booster.c     **** 	RESET(NOTAUS);
+  63:booster.c     **** 
+  64:booster.c     **** 	SET_OUTPUT(ACTIVATE_BOOSTER);
+  65:booster.c     **** 	RESET(ACTIVATE_BOOSTER);
+  66:booster.c     **** 	SET_OUTPUT(CHARGE);
+  67:booster.c     **** 	RESET(CHARGE);
+  68:booster.c     **** 	SET_INPUT(FAULT);
+  69:booster.c     **** 	RESET(FAULT);
+  70:booster.c     **** 	SET_INPUT(DONE);
+  71:booster.c     **** 	RESET(DONE);
+  72:booster.c     **** 
+  73:booster.c     **** 	booster_reset();
+  74:booster.c     **** 	mode = Mode_Automatic;
+  75:booster.c     **** }
+  76:booster.c     **** 
+  77:booster.c     **** void booster_reset()
+  78:booster.c     **** {
+ 136               	.LM0:
+ 137               	.LFBB1:
+ 138               	/* prologue: function */
+ 139               	/* frame size = 0 */
+ 140               	/* stack size = 0 */
+ 141               	.L__stack_usage = 0
+  79:booster.c     **** 	RESET(NOTAUS);
+ 143               	.LM1:
+ 144 0000 2D98      		cbi 0x5,5
+  80:booster.c     **** 	RESET(ACTIVATE_BOOSTER);
+ 146               	.LM2:
+ 147 0002 4598      		cbi 0x8,5
+  81:booster.c     **** 	RESET(CHARGE);
+ 149               	.LM3:
+ 150 0004 4698      		cbi 0x8,6
+  82:booster.c     **** 	RESET(FAULT);
+ 152               	.LM4:
+ 153 0006 4498      		cbi 0x8,4
+  83:booster.c     **** 	RESET(DONE);
+ 155               	.LM5:
+ 156 0008 4798      		cbi 0x8,7
+  84:booster.c     **** 	RESET(KICK);
+ 158               	.LM6:
+ 159 000a 2B98      		cbi 0x5,3
+  85:booster.c     **** 
+  86:booster.c     **** 
+  87:booster.c     **** 	SET(RESET_NOTAUS);
+ 161               	.LM7:
+ 162 000c 2C9A      		sbi 0x5,4
+ 163               	.LBB5:
+ 164               	.LBB6:
+ 166               	.Ltext1:
+   1:/usr/lib/avr/include/util/delay.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2004,2005,2007 Joerg Wunsch
+   3:/usr/lib/avr/include/util/delay.h ****    Copyright (c) 2007  Florin-Viorel Petrov
+   4:/usr/lib/avr/include/util/delay.h ****    All rights reserved.
+   5:/usr/lib/avr/include/util/delay.h **** 
+   6:/usr/lib/avr/include/util/delay.h ****    Redistribution and use in source and binary forms, with or without
+   7:/usr/lib/avr/include/util/delay.h ****    modification, are permitted provided that the following conditions are met:
+   8:/usr/lib/avr/include/util/delay.h **** 
+   9:/usr/lib/avr/include/util/delay.h ****    * Redistributions of source code must retain the above copyright
+  10:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer.
+  11:/usr/lib/avr/include/util/delay.h **** 
+  12:/usr/lib/avr/include/util/delay.h ****    * Redistributions in binary form must reproduce the above copyright
+  13:/usr/lib/avr/include/util/delay.h ****      notice, this list of conditions and the following disclaimer in
+  14:/usr/lib/avr/include/util/delay.h ****      the documentation and/or other materials provided with the
+  15:/usr/lib/avr/include/util/delay.h ****      distribution.
+  16:/usr/lib/avr/include/util/delay.h **** 
+  17:/usr/lib/avr/include/util/delay.h ****    * Neither the name of the copyright holders nor the names of
+  18:/usr/lib/avr/include/util/delay.h ****      contributors may be used to endorse or promote products derived
+  19:/usr/lib/avr/include/util/delay.h ****      from this software without specific prior written permission.
+  20:/usr/lib/avr/include/util/delay.h **** 
+  21:/usr/lib/avr/include/util/delay.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  22:/usr/lib/avr/include/util/delay.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  23:/usr/lib/avr/include/util/delay.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  24:/usr/lib/avr/include/util/delay.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  25:/usr/lib/avr/include/util/delay.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  26:/usr/lib/avr/include/util/delay.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  27:/usr/lib/avr/include/util/delay.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  28:/usr/lib/avr/include/util/delay.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  29:/usr/lib/avr/include/util/delay.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  30:/usr/lib/avr/include/util/delay.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  31:/usr/lib/avr/include/util/delay.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  32:/usr/lib/avr/include/util/delay.h **** 
+  33:/usr/lib/avr/include/util/delay.h **** /* $Id$ */
+  34:/usr/lib/avr/include/util/delay.h **** 
+  35:/usr/lib/avr/include/util/delay.h **** #ifndef _UTIL_DELAY_H_
+  36:/usr/lib/avr/include/util/delay.h **** #define _UTIL_DELAY_H_ 1
+  37:/usr/lib/avr/include/util/delay.h **** 
+  38:/usr/lib/avr/include/util/delay.h **** #ifndef __HAS_DELAY_CYCLES
+  39:/usr/lib/avr/include/util/delay.h **** #define __HAS_DELAY_CYCLES 1
+  40:/usr/lib/avr/include/util/delay.h **** #endif
+  41:/usr/lib/avr/include/util/delay.h **** 
+  42:/usr/lib/avr/include/util/delay.h **** #include <inttypes.h>
+  43:/usr/lib/avr/include/util/delay.h **** #include <util/delay_basic.h>
+  44:/usr/lib/avr/include/util/delay.h **** #include <math.h>
+  45:/usr/lib/avr/include/util/delay.h **** 
+  46:/usr/lib/avr/include/util/delay.h **** /** \file */
+  47:/usr/lib/avr/include/util/delay.h **** /** \defgroup util_delay <util/delay.h>: Convenience functions for busy-wait delay loops
+  48:/usr/lib/avr/include/util/delay.h ****     \code
+  49:/usr/lib/avr/include/util/delay.h ****     #define F_CPU 1000000UL  // 1 MHz
+  50:/usr/lib/avr/include/util/delay.h ****     //#define F_CPU 14.7456E6
+  51:/usr/lib/avr/include/util/delay.h ****     #include <util/delay.h>
+  52:/usr/lib/avr/include/util/delay.h ****     \endcode
+  53:/usr/lib/avr/include/util/delay.h **** 
+  54:/usr/lib/avr/include/util/delay.h ****     \note As an alternative method, it is possible to pass the
+  55:/usr/lib/avr/include/util/delay.h ****     F_CPU macro down to the compiler from the Makefile.
+  56:/usr/lib/avr/include/util/delay.h ****     Obviously, in that case, no \c \#define statement should be
+  57:/usr/lib/avr/include/util/delay.h ****     used.
+  58:/usr/lib/avr/include/util/delay.h **** 
+  59:/usr/lib/avr/include/util/delay.h ****     The functions in this header file are wrappers around the basic
+  60:/usr/lib/avr/include/util/delay.h ****     busy-wait functions from <util/delay_basic.h>.  They are meant as
+  61:/usr/lib/avr/include/util/delay.h ****     convenience functions where actual time values can be specified
+  62:/usr/lib/avr/include/util/delay.h ****     rather than a number of cycles to wait for.  The idea behind is
+  63:/usr/lib/avr/include/util/delay.h ****     that compile-time constant expressions will be eliminated by
+  64:/usr/lib/avr/include/util/delay.h ****     compiler optimization so floating-point expressions can be used
+  65:/usr/lib/avr/include/util/delay.h ****     to calculate the number of delay cycles needed based on the CPU
+  66:/usr/lib/avr/include/util/delay.h ****     frequency passed by the macro F_CPU.
+  67:/usr/lib/avr/include/util/delay.h **** 
+  68:/usr/lib/avr/include/util/delay.h ****     \note In order for these functions to work as intended, compiler
+  69:/usr/lib/avr/include/util/delay.h ****     optimizations <em>must</em> be enabled, and the delay time
+  70:/usr/lib/avr/include/util/delay.h ****     <em>must</em> be an expression that is a known constant at
+  71:/usr/lib/avr/include/util/delay.h ****     compile-time.  If these requirements are not met, the resulting
+  72:/usr/lib/avr/include/util/delay.h ****     delay will be much longer (and basically unpredictable), and
+  73:/usr/lib/avr/include/util/delay.h ****     applications that otherwise do not use floating-point calculations
+  74:/usr/lib/avr/include/util/delay.h ****     will experience severe code bloat by the floating-point library
+  75:/usr/lib/avr/include/util/delay.h ****     routines linked into the application.
+  76:/usr/lib/avr/include/util/delay.h **** 
+  77:/usr/lib/avr/include/util/delay.h ****     The functions available allow the specification of microsecond, and
+  78:/usr/lib/avr/include/util/delay.h ****     millisecond delays directly, using the application-supplied macro
+  79:/usr/lib/avr/include/util/delay.h ****     F_CPU as the CPU clock frequency (in Hertz).
+  80:/usr/lib/avr/include/util/delay.h **** 
+  81:/usr/lib/avr/include/util/delay.h **** */
+  82:/usr/lib/avr/include/util/delay.h **** 
+  83:/usr/lib/avr/include/util/delay.h **** #if !defined(__DOXYGEN__)
+  84:/usr/lib/avr/include/util/delay.h **** static inline void _delay_us(double __us) __attribute__((always_inline));
+  85:/usr/lib/avr/include/util/delay.h **** static inline void _delay_ms(double __ms) __attribute__((always_inline));
+  86:/usr/lib/avr/include/util/delay.h **** #endif
+  87:/usr/lib/avr/include/util/delay.h **** 
+  88:/usr/lib/avr/include/util/delay.h **** #ifndef F_CPU
+  89:/usr/lib/avr/include/util/delay.h **** /* prevent compiler error by supplying a default */
+  90:/usr/lib/avr/include/util/delay.h **** # warning "F_CPU not defined for <util/delay.h>"
+  91:/usr/lib/avr/include/util/delay.h **** # define F_CPU 1000000UL
+  92:/usr/lib/avr/include/util/delay.h **** #endif
+  93:/usr/lib/avr/include/util/delay.h **** 
+  94:/usr/lib/avr/include/util/delay.h **** #ifndef __OPTIMIZE__
+  95:/usr/lib/avr/include/util/delay.h **** # warning "Compiler optimizations disabled; functions from <util/delay.h> won't work as designed"
+  96:/usr/lib/avr/include/util/delay.h **** #endif
+  97:/usr/lib/avr/include/util/delay.h **** 
+  98:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+  99:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 100:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 101:/usr/lib/avr/include/util/delay.h **** #  include <math.h>
+ 102:/usr/lib/avr/include/util/delay.h **** #endif
+ 103:/usr/lib/avr/include/util/delay.h **** 
+ 104:/usr/lib/avr/include/util/delay.h **** /**
+ 105:/usr/lib/avr/include/util/delay.h ****    \ingroup util_delay
+ 106:/usr/lib/avr/include/util/delay.h **** 
+ 107:/usr/lib/avr/include/util/delay.h ****    Perform a delay of \c __ms milliseconds, using _delay_loop_2().
+ 108:/usr/lib/avr/include/util/delay.h **** 
+ 109:/usr/lib/avr/include/util/delay.h ****    The macro F_CPU is supposed to be defined to a
+ 110:/usr/lib/avr/include/util/delay.h ****    constant defining the CPU clock frequency (in Hertz).
+ 111:/usr/lib/avr/include/util/delay.h **** 
+ 112:/usr/lib/avr/include/util/delay.h ****    The maximal possible delay is 262.14 ms / F_CPU in MHz.
+ 113:/usr/lib/avr/include/util/delay.h **** 
+ 114:/usr/lib/avr/include/util/delay.h ****    When the user request delay which exceed the maximum possible one,
+ 115:/usr/lib/avr/include/util/delay.h ****    _delay_ms() provides a decreased resolution functionality. In this
+ 116:/usr/lib/avr/include/util/delay.h ****    mode _delay_ms() will work with a resolution of 1/10 ms, providing
+ 117:/usr/lib/avr/include/util/delay.h ****    delays up to 6.5535 seconds (independent from CPU frequency).  The
+ 118:/usr/lib/avr/include/util/delay.h ****    user will not be informed about decreased resolution.
+ 119:/usr/lib/avr/include/util/delay.h **** 
+ 120:/usr/lib/avr/include/util/delay.h ****    If the avr-gcc toolchain has __builtin_avr_delay_cycles(unsigned long)
+ 121:/usr/lib/avr/include/util/delay.h ****    support, maximal possible delay is 4294967.295 ms/ F_CPU in MHz. For
+ 122:/usr/lib/avr/include/util/delay.h ****    values greater than the maximal possible delay, overflows results in
+ 123:/usr/lib/avr/include/util/delay.h ****    no delay i.e., 0ms.
+ 124:/usr/lib/avr/include/util/delay.h **** 
+ 125:/usr/lib/avr/include/util/delay.h ****    Conversion of __us into clock cycles may not always result in integer.
+ 126:/usr/lib/avr/include/util/delay.h ****    By default, the clock cycles rounded up to next integer. This ensures that
+ 127:/usr/lib/avr/include/util/delay.h ****    the user gets atleast __us microseconds of delay.
+ 128:/usr/lib/avr/include/util/delay.h **** 
+ 129:/usr/lib/avr/include/util/delay.h ****    Alternatively, user can define __DELAY_ROUND_DOWN__ and __DELAY_ROUND_CLOSEST__
+ 130:/usr/lib/avr/include/util/delay.h ****    to round down and round to closest integer.
+ 131:/usr/lib/avr/include/util/delay.h **** 
+ 132:/usr/lib/avr/include/util/delay.h ****    Note: The new implementation of _delay_ms(double __ms) with 
+ 133:/usr/lib/avr/include/util/delay.h ****     __builtin_avr_delay_cycles(unsigned long) support is not backward compatible. 
+ 134:/usr/lib/avr/include/util/delay.h ****    User can define __DELAY_BACKWARD_COMPATIBLE__ to get a backward compatible delay.
+ 135:/usr/lib/avr/include/util/delay.h ****    Also, the backward compatible
+ 136:/usr/lib/avr/include/util/delay.h ****    algorithm will be chosen if the code is compiled in a <em>freestanding
+ 137:/usr/lib/avr/include/util/delay.h ****    environment</em> (GCC option \c -ffreestanding), as the math functions
+ 138:/usr/lib/avr/include/util/delay.h ****    required for rounding are not available to the compiler then.
+ 139:/usr/lib/avr/include/util/delay.h **** 
+ 140:/usr/lib/avr/include/util/delay.h ****  */
+ 141:/usr/lib/avr/include/util/delay.h **** void
+ 142:/usr/lib/avr/include/util/delay.h **** _delay_ms(double __ms)
+ 143:/usr/lib/avr/include/util/delay.h **** {
+ 144:/usr/lib/avr/include/util/delay.h **** 	double __tmp ; 
+ 145:/usr/lib/avr/include/util/delay.h **** #if __HAS_DELAY_CYCLES && defined(__OPTIMIZE__) && \
+ 146:/usr/lib/avr/include/util/delay.h ****   !defined(__DELAY_BACKWARD_COMPATIBLE__) &&	   \
+ 147:/usr/lib/avr/include/util/delay.h ****   __STDC_HOSTED__
+ 148:/usr/lib/avr/include/util/delay.h **** 	uint32_t __ticks_dc;
+ 149:/usr/lib/avr/include/util/delay.h **** 	extern void __builtin_avr_delay_cycles(unsigned long);
+ 150:/usr/lib/avr/include/util/delay.h **** 	__tmp = ((F_CPU) / 1e3) * __ms;
+ 151:/usr/lib/avr/include/util/delay.h **** 
+ 152:/usr/lib/avr/include/util/delay.h **** 	#if defined(__DELAY_ROUND_DOWN__)
+ 153:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)fabs(__tmp);
+ 154:/usr/lib/avr/include/util/delay.h **** 
+ 155:/usr/lib/avr/include/util/delay.h **** 	#elif defined(__DELAY_ROUND_CLOSEST__)
+ 156:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(fabs(__tmp)+0.5);
+ 157:/usr/lib/avr/include/util/delay.h **** 
+ 158:/usr/lib/avr/include/util/delay.h **** 	#else
+ 159:/usr/lib/avr/include/util/delay.h **** 		//round up by default
+ 160:/usr/lib/avr/include/util/delay.h **** 		__ticks_dc = (uint32_t)(ceil(fabs(__tmp)));
+ 161:/usr/lib/avr/include/util/delay.h **** 	#endif
+ 162:/usr/lib/avr/include/util/delay.h **** 
+ 163:/usr/lib/avr/include/util/delay.h **** 	__builtin_avr_delay_cycles(__ticks_dc);
+ 168               	.LM8:
+ 169 000e 8FE9      		ldi r24,lo8(3999)
+ 170 0010 9FE0      		ldi r25,hi8(3999)
+ 171 0012 0197      	1:	sbiw r24,1
+ 172 0014 01F4      		brne 1b
+ 173 0016 00C0      		rjmp .
+ 174 0018 0000      		nop
+ 175               	.LBE6:
+ 176               	.LBE5:
+ 178               	.Ltext2:
+  88:booster.c     **** 	_delay_ms(1);
+  89:booster.c     **** 	RESET(RESET_NOTAUS);
+ 180               	.LM9:
+ 181 001a 2C98      		cbi 0x5,4
+ 182 001c 0895      		ret
+ 184               	.Lscope1:
+ 186               	.global	booster_init
+ 188               	booster_init:
+  58:booster.c     **** 	SET_OUTPUT(RESET_NOTAUS);
+ 190               	.LM10:
+ 191               	.LFBB2:
+ 192               	/* prologue: function */
+ 193               	/* frame size = 0 */
+ 194               	/* stack size = 0 */
+ 195               	.L__stack_usage = 0
+  59:booster.c     **** 	RESET(RESET_NOTAUS);
+ 197               	.LM11:
+ 198 001e 249A      		sbi 0x4,4
+  60:booster.c     **** 	SET_INPUT(NOTAUS);
+ 200               	.LM12:
+ 201 0020 2C98      		cbi 0x5,4
+  61:booster.c     **** 	RESET(NOTAUS);
+ 203               	.LM13:
+ 204 0022 2598      		cbi 0x4,5
+  62:booster.c     **** 
+ 206               	.LM14:
+ 207 0024 2D98      		cbi 0x5,5
+  64:booster.c     **** 	RESET(ACTIVATE_BOOSTER);
+ 209               	.LM15:
+ 210 0026 3D9A      		sbi 0x7,5
+  65:booster.c     **** 	SET_OUTPUT(CHARGE);
+ 212               	.LM16:
+ 213 0028 4598      		cbi 0x8,5
+  66:booster.c     **** 	RESET(CHARGE);
+ 215               	.LM17:
+ 216 002a 3E9A      		sbi 0x7,6
+  67:booster.c     **** 	SET_INPUT(FAULT);
+ 218               	.LM18:
+ 219 002c 4698      		cbi 0x8,6
+  68:booster.c     **** 	RESET(FAULT);
+ 221               	.LM19:
+ 222 002e 3C98      		cbi 0x7,4
+  69:booster.c     **** 	SET_INPUT(DONE);
+ 224               	.LM20:
+ 225 0030 4498      		cbi 0x8,4
+  70:booster.c     **** 	RESET(DONE);
+ 227               	.LM21:
+ 228 0032 3F98      		cbi 0x7,7
+  71:booster.c     **** 
+ 230               	.LM22:
+ 231 0034 4798      		cbi 0x8,7
+  73:booster.c     **** 	mode = Mode_Automatic;
+ 233               	.LM23:
+ 234 0036 0E94 0000 		call booster_reset
+  74:booster.c     **** }
+ 236               	.LM24:
+ 237 003a 1092 0000 		sts mode,__zero_reg__
+ 238 003e 0895      		ret
+ 240               	.Lscope2:
+ 242               	.global	booster_deactivate
+ 244               	booster_deactivate:
+  90:booster.c     **** }
+  91:booster.c     **** 
+  92:booster.c     **** enum eState booster_getState()
+  93:booster.c     **** {
+  94:booster.c     **** 	if(!IS_SET(NOTAUS))
+  95:booster.c     **** 		return State_EmergencyShutdown;
+  96:booster.c     **** 
+  97:booster.c     **** 	if(IS_SET(RESET_NOTAUS))
+  98:booster.c     **** 		return State_EmergencyReset;
+  99:booster.c     **** 
+ 100:booster.c     **** 	switch(mode) {
+ 101:booster.c     **** 		case Mode_Error:
+ 102:booster.c     **** 			return State_Error;
+ 103:booster.c     **** 			break;
+ 104:booster.c     **** 
+ 105:booster.c     **** 		case Mode_ErrorCap:
+ 106:booster.c     **** 			return State_Error_CAP_OVLO;
+ 107:booster.c     **** 			break;
+ 108:booster.c     **** 	}
+ 109:booster.c     **** 
+ 110:booster.c     **** 	bool active = IS_SET(ACTIVATE_BOOSTER);
+ 111:booster.c     **** 	bool kick = IS_SET(KICK);
+ 112:booster.c     **** 	bool fault = IS_SET(FAULT);
+ 113:booster.c     **** 	bool charge = IS_SET(CHARGE);
+ 114:booster.c     **** 
+ 115:booster.c     **** 	if(fault)
+ 116:booster.c     **** 	{
+ 117:booster.c     **** 		uint16_t logicVoltage = booster_getLogicVoltage();
+ 118:booster.c     **** 		uint16_t boosterVoltage = booster_getBoosterVoltage();
+ 119:booster.c     **** 
+ 120:booster.c     **** 		if(logicVoltage < 18 || logicVoltage > 29)
+ 121:booster.c     **** 			return State_VoltageLowLogic;
+ 122:booster.c     **** 
+ 123:booster.c     **** 		if(boosterVoltage < 18 || logicVoltage > 29)
+ 124:booster.c     **** 			return State_VoltageLowBooster;
+ 125:booster.c     **** 
+ 126:booster.c     **** 		return State_VoltageLow;
+ 127:booster.c     **** 	}
+ 128:booster.c     **** 
+ 129:booster.c     **** 	if(active != charge) // Should be the same. Otherwise emergency shutdown is triggered
+ 130:booster.c     **** 		return State_EmergencyTriggered;
+ 131:booster.c     **** 
+ 132:booster.c     **** 	if(!active & !kick) {
+ 133:booster.c     **** 		if (mode == Mode_SoftwareControlledHold)
+ 134:booster.c     **** 			return State_ActivatedHold;
+ 135:booster.c     **** 		else
+ 136:booster.c     **** 			return State_Deactivated;
+ 137:booster.c     **** 	}
+ 138:booster.c     **** 
+ 139:booster.c     **** 	if(active & !kick)
+ 140:booster.c     **** 		return State_Activated;
+ 141:booster.c     **** 
+ 142:booster.c     **** 	if(!active & kick)
+ 143:booster.c     **** 		return State_ActivatedKicking;
+ 144:booster.c     **** 
+ 145:booster.c     **** 	if(active & kick)		// Should never be reached
+ 146:booster.c     **** 		return State_FalseKick;
+ 147:booster.c     **** 
+ 148:booster.c     **** 	return State_False;
+ 149:booster.c     **** }
+ 150:booster.c     **** 
+ 151:booster.c     **** int8_t booster_activate()
+ 152:booster.c     **** {
+ 153:booster.c     **** 	switch (booster_getState())
+ 154:booster.c     **** 	{
+ 155:booster.c     **** 		case State_Activated:
+ 156:booster.c     **** 		case State_ActivatedHold:
+ 157:booster.c     **** 			SET(ACTIVATE_BOOSTER);
+ 158:booster.c     **** 			return 1;
+ 159:booster.c     **** 			break;
+ 160:booster.c     **** 
+ 161:booster.c     **** 		case State_Deactivated:
+ 162:booster.c     **** 			SET(ACTIVATE_BOOSTER);
+ 163:booster.c     **** 			return 1;
+ 164:booster.c     **** 			break;
+ 165:booster.c     **** 
+ 166:booster.c     **** 		case State_ActivatedKicking:
+ 167:booster.c     **** 			RESET(ACTIVATE_BOOSTER);
+ 168:booster.c     **** 			return 0;
+ 169:booster.c     **** 			break;
+ 170:booster.c     **** 
+ 171:booster.c     **** 		default:
+ 172:booster.c     **** 			error("Booster not Activated, check States");
+ 173:booster.c     **** 			booster_deactivate();
+ 174:booster.c     **** 			return 0;
+ 175:booster.c     **** 			break;
+ 176:booster.c     **** 	}
+ 177:booster.c     **** 
+ 178:booster.c     **** 	return 1;
+ 179:booster.c     **** }
+ 180:booster.c     **** 
+ 181:booster.c     **** void booster_deactivate()
+ 182:booster.c     **** {
+ 246               	.LM25:
+ 247               	.LFBB3:
+ 248               	/* prologue: function */
+ 249               	/* frame size = 0 */
+ 250               	/* stack size = 0 */
+ 251               	.L__stack_usage = 0
+ 183:booster.c     **** 	RESET(ACTIVATE_BOOSTER);
+ 253               	.LM26:
+ 254 0040 4598      		cbi 0x8,5
+ 184:booster.c     **** 	RESET(KICK);
+ 256               	.LM27:
+ 257 0042 2B98      		cbi 0x5,3
+ 258 0044 0895      		ret
+ 260               	.Lscope3:
+ 261               	.global	__floatunsisf
+ 262               	.global	__mulsf3
+ 263               	.global	__fixunssfsi
+ 265               	.global	booster_getLogicVoltage
+ 267               	booster_getLogicVoltage:
+ 185:booster.c     **** }
+ 186:booster.c     **** 
+ 187:booster.c     **** uint8_t booster_canKick() {
+ 188:booster.c     **** 	switch (booster_getState()) {
+ 189:booster.c     **** 		case State_Activated:
+ 190:booster.c     **** 		case State_ActivatedHold:
+ 191:booster.c     **** 			return 1;
+ 192:booster.c     **** 			break;
+ 193:booster.c     **** 
+ 194:booster.c     **** 		case State_ActivatedKicking:
+ 195:booster.c     **** 			booster_reset();
+ 196:booster.c     **** 			debug("Asked for Kick while Kicking");
+ 197:booster.c     **** 			return 0;
+ 198:booster.c     **** 			break;
+ 199:booster.c     **** 
+ 200:booster.c     **** 		default:
+ 201:booster.c     **** 			return 0;
+ 202:booster.c     **** 			break;
+ 203:booster.c     **** 	}
+ 204:booster.c     **** }
+ 205:booster.c     **** 
+ 206:booster.c     **** uint16_t booster_getLogicVoltage()
+ 207:booster.c     **** {
+ 269               	.LM28:
+ 270               	.LFBB4:
+ 271               	/* prologue: function */
+ 272               	/* frame size = 0 */
+ 273               	/* stack size = 0 */
+ 274               	.L__stack_usage = 0
+ 208:booster.c     **** 	// factor = ADC-Ref-Voltage * Voltage-Divider / ADC-Resolution
+ 209:booster.c     **** 	static double factor = 0.048479; // 5.0 * 556/56 / 1024;
+ 210:booster.c     **** 
+ 211:booster.c     **** 	double ret = adc_logic_raw * factor;
+ 276               	.LM29:
+ 277 0046 6091 0000 		lds r22,adc_logic_raw
+ 278 004a 7091 0000 		lds r23,adc_logic_raw+1
+ 279 004e 80E0      		ldi r24,0
+ 280 0050 90E0      		ldi r25,0
+ 281 0052 0E94 0000 		call __floatunsisf
+ 282 0056 2AEE      		ldi r18,lo8(-22)
+ 283 0058 31E9      		ldi r19,lo8(-111)
+ 284 005a 46E4      		ldi r20,lo8(70)
+ 285 005c 5DE3      		ldi r21,lo8(61)
+ 286 005e 0E94 0000 		call __mulsf3
+ 212:booster.c     **** 
+ 213:booster.c     **** 	return (uint16_t) ret; // * factor;
+ 288               	.LM30:
+ 289 0062 0E94 0000 		call __fixunssfsi
+ 214:booster.c     **** }
+ 291               	.LM31:
+ 292 0066 CB01      		movw r24,r22
+ 293 0068 0895      		ret
+ 295               	.Lscope4:
+ 297               	.global	booster_getBoosterVoltage
+ 299               	booster_getBoosterVoltage:
+ 215:booster.c     **** 
+ 216:booster.c     **** uint16_t booster_getBoosterVoltage()
+ 217:booster.c     **** {
+ 301               	.LM32:
+ 302               	.LFBB5:
+ 303               	/* prologue: function */
+ 304               	/* frame size = 0 */
+ 305               	/* stack size = 0 */
+ 306               	.L__stack_usage = 0
+ 218:booster.c     **** 	// factor = ADC-Ref-Voltage * Voltage-Divider / ADC-Resolution
+ 219:booster.c     **** 	static double factor = 0.048479; // 5.0 * 556/56 / 1024;
+ 220:booster.c     **** 
+ 221:booster.c     **** 	double ret = adc_booster_raw * factor;
+ 308               	.LM33:
+ 309 006a 6091 0000 		lds r22,adc_booster_raw
+ 310 006e 7091 0000 		lds r23,adc_booster_raw+1
+ 311 0072 80E0      		ldi r24,0
+ 312 0074 90E0      		ldi r25,0
+ 313 0076 0E94 0000 		call __floatunsisf
+ 314 007a 2AEE      		ldi r18,lo8(-22)
+ 315 007c 31E9      		ldi r19,lo8(-111)
+ 316 007e 46E4      		ldi r20,lo8(70)
+ 317 0080 5DE3      		ldi r21,lo8(61)
+ 318 0082 0E94 0000 		call __mulsf3
+ 222:booster.c     **** 
+ 223:booster.c     **** 	return (uint16_t) ret; // * factor;
+ 320               	.LM34:
+ 321 0086 0E94 0000 		call __fixunssfsi
+ 224:booster.c     **** }
+ 323               	.LM35:
+ 324 008a CB01      		movw r24,r22
+ 325 008c 0895      		ret
+ 327               	.Lscope5:
+ 329               	.global	booster_getState
+ 331               	booster_getState:
+  93:booster.c     **** 	if(!IS_SET(NOTAUS))
+ 333               	.LM36:
+ 334               	.LFBB6:
+ 335 008e CF93      		push r28
+ 336 0090 DF93      		push r29
+ 337               	/* prologue: function */
+ 338               	/* frame size = 0 */
+ 339               	/* stack size = 2 */
+ 340               	.L__stack_usage = 2
+  94:booster.c     **** 		return State_EmergencyShutdown;
+ 342               	.LM37:
+ 343 0092 1D9B      		sbis 0x3,5
+ 344 0094 00C0      		rjmp .L13
+  97:booster.c     **** 		return State_EmergencyReset;
+ 346               	.LM38:
+ 347 0096 1C99      		sbic 0x3,4
+ 348 0098 00C0      		rjmp .L14
+ 349               	.LBB10:
+ 350               	.LBB11:
+ 100:booster.c     **** 		case Mode_Error:
+ 352               	.LM39:
+ 353 009a 2091 0000 		lds r18,mode
+ 354 009e 2530      		cpi r18,lo8(5)
+ 355 00a0 01F0      		breq .L15
+ 356 00a2 2630      		cpi r18,lo8(6)
+ 357 00a4 01F4      		brne .L27
+ 106:booster.c     **** 			break;
+ 359               	.LM40:
+ 360 00a6 82E0      		ldi r24,lo8(2)
+ 361 00a8 90E0      		ldi r25,0
+ 362 00aa 00C0      		rjmp .L7
+ 363               	.L27:
+ 110:booster.c     **** 	bool kick = IS_SET(KICK);
+ 365               	.LM41:
+ 366 00ac 86B1      		in r24,0x6
+ 111:booster.c     **** 	bool fault = IS_SET(FAULT);
+ 368               	.LM42:
+ 369 00ae 93B1      		in r25,0x3
+ 112:booster.c     **** 	bool charge = IS_SET(CHARGE);
+ 371               	.LM43:
+ 372 00b0 46B1      		in r20,0x6
+ 113:booster.c     **** 
+ 374               	.LM44:
+ 375 00b2 36B1      		in r19,0x6
+ 115:booster.c     **** 	{
+ 377               	.LM45:
+ 378 00b4 44FF      		sbrs r20,4
+ 379 00b6 00C0      		rjmp .L10
+ 380               	.LBB12:
+ 117:booster.c     **** 		uint16_t boosterVoltage = booster_getBoosterVoltage();
+ 382               	.LM46:
+ 383 00b8 0E94 0000 		call booster_getLogicVoltage
+ 384 00bc EC01      		movw r28,r24
+ 118:booster.c     **** 
+ 386               	.LM47:
+ 387 00be 0E94 0000 		call booster_getBoosterVoltage
+ 120:booster.c     **** 			return State_VoltageLowLogic;
+ 389               	.LM48:
+ 390 00c2 6297      		sbiw r28,18
+ 391 00c4 2C97      		sbiw r28,12
+ 392 00c6 00F4      		brsh .L16
+ 123:booster.c     **** 			return State_VoltageLowBooster;
+ 394               	.LM49:
+ 395 00c8 4297      		sbiw r24,18
+ 396 00ca 00F0      		brlo .L17
+ 126:booster.c     **** 	}
+ 398               	.LM50:
+ 399 00cc 80E2      		ldi r24,lo8(32)
+ 400 00ce 90E0      		ldi r25,0
+ 401 00d0 00C0      		rjmp .L7
+ 402               	.L10:
+ 403               	.LBE12:
+ 110:booster.c     **** 	bool kick = IS_SET(KICK);
+ 405               	.LM51:
+ 406 00d2 85FB      		bst r24,5
+ 407 00d4 8827      		clr r24
+ 408 00d6 80F9      		bld r24,0
+ 113:booster.c     **** 
+ 410               	.LM52:
+ 411 00d8 36FB      		bst r19,6
+ 412 00da 3327      		clr r19
+ 413 00dc 30F9      		bld r19,0
+ 129:booster.c     **** 		return State_EmergencyTriggered;
+ 415               	.LM53:
+ 416 00de 8313      		cpse r24,r19
+ 417 00e0 00C0      		rjmp .L18
+ 111:booster.c     **** 	bool fault = IS_SET(FAULT);
+ 419               	.LM54:
+ 420 00e2 93FB      		bst r25,3
+ 421 00e4 9927      		clr r25
+ 422 00e6 90F9      		bld r25,0
+ 132:booster.c     **** 		if (mode == Mode_SoftwareControlledHold)
+ 424               	.LM55:
+ 425 00e8 31E0      		ldi r19,lo8(1)
+ 426 00ea 3927      		eor r19,r25
+ 427 00ec 8317      		cp r24,r19
+ 428 00ee 00F4      		brsh .L11
+ 133:booster.c     **** 			return State_ActivatedHold;
+ 430               	.LM56:
+ 431 00f0 2230      		cpi r18,lo8(2)
+ 432 00f2 01F0      		breq .L19
+ 136:booster.c     **** 	}
+ 434               	.LM57:
+ 435 00f4 80E0      		ldi r24,0
+ 436 00f6 90E0      		ldi r25,0
+ 437 00f8 00C0      		rjmp .L7
+ 438               	.L11:
+ 139:booster.c     **** 		return State_Activated;
+ 440               	.LM58:
+ 441 00fa 9817      		cp r25,r24
+ 442 00fc 00F0      		brlo .L20
+ 142:booster.c     **** 		return State_ActivatedKicking;
+ 444               	.LM59:
+ 445 00fe 8917      		cp r24,r25
+ 446 0100 00F0      		brlo .L21
+ 145:booster.c     **** 		return State_FalseKick;
+ 448               	.LM60:
+ 449 0102 9923      		tst r25
+ 450 0104 01F0      		breq .L23
+ 451 0106 8111      		cpse r24,__zero_reg__
+ 452 0108 00C0      		rjmp .L22
+ 453               	.L23:
+ 148:booster.c     **** }
+ 455               	.LM61:
+ 456 010a 80EF      		ldi r24,lo8(-16)
+ 457 010c 90E0      		ldi r25,0
+ 458 010e 00C0      		rjmp .L7
+ 459               	.L13:
+ 460               	.LBE11:
+ 461               	.LBE10:
+  95:booster.c     **** 
+ 463               	.LM62:
+ 464 0110 80EE      		ldi r24,lo8(-32)
+ 465 0112 90E0      		ldi r25,0
+ 466 0114 00C0      		rjmp .L7
+ 467               	.L14:
+  98:booster.c     **** 
+ 469               	.LM63:
+ 470 0116 8EEE      		ldi r24,lo8(-18)
+ 471 0118 90E0      		ldi r25,0
+ 472 011a 00C0      		rjmp .L7
+ 473               	.L15:
+ 474               	.LBB15:
+ 475               	.LBB14:
+ 102:booster.c     **** 			break;
+ 477               	.LM64:
+ 478 011c 81E0      		ldi r24,lo8(1)
+ 479 011e 90E0      		ldi r25,0
+ 480 0120 00C0      		rjmp .L7
+ 481               	.L16:
+ 482               	.LBB13:
+ 121:booster.c     **** 
+ 484               	.LM65:
+ 485 0122 81E2      		ldi r24,lo8(33)
+ 486 0124 90E0      		ldi r25,0
+ 487 0126 00C0      		rjmp .L7
+ 488               	.L17:
+ 124:booster.c     **** 
+ 490               	.LM66:
+ 491 0128 82E2      		ldi r24,lo8(34)
+ 492 012a 90E0      		ldi r25,0
+ 493 012c 00C0      		rjmp .L7
+ 494               	.L18:
+ 495               	.LBE13:
+ 130:booster.c     **** 
+ 497               	.LM67:
+ 498 012e 81EE      		ldi r24,lo8(-31)
+ 499 0130 90E0      		ldi r25,0
+ 500 0132 00C0      		rjmp .L7
+ 501               	.L19:
+ 134:booster.c     **** 		else
+ 503               	.LM68:
+ 504 0134 81E1      		ldi r24,lo8(17)
+ 505 0136 90E0      		ldi r25,0
+ 506 0138 00C0      		rjmp .L7
+ 507               	.L20:
+ 140:booster.c     **** 
+ 509               	.LM69:
+ 510 013a 80E1      		ldi r24,lo8(16)
+ 511 013c 90E0      		ldi r25,0
+ 512 013e 00C0      		rjmp .L7
+ 513               	.L21:
+ 143:booster.c     **** 
+ 515               	.LM70:
+ 516 0140 82E1      		ldi r24,lo8(18)
+ 517 0142 90E0      		ldi r25,0
+ 518 0144 00C0      		rjmp .L7
+ 519               	.L22:
+ 146:booster.c     **** 
+ 521               	.LM71:
+ 522 0146 81EF      		ldi r24,lo8(-15)
+ 523 0148 90E0      		ldi r25,0
+ 524               	.L7:
+ 525               	/* epilogue start */
+ 526               	.LBE14:
+ 527               	.LBE15:
+ 149:booster.c     **** 
+ 529               	.LM72:
+ 530 014a DF91      		pop r29
+ 531 014c CF91      		pop r28
+ 532 014e 0895      		ret
+ 550               	.Lscope6:
+ 551               		.section	.rodata.str1.1,"aMS",@progbits,1
+ 552               	.LC0:
+ 553 0000 426F 6F73 		.string	"Booster not Activated, check States"
+ 553      7465 7220 
+ 553      6E6F 7420 
+ 553      4163 7469 
+ 553      7661 7465 
+ 554               		.text
+ 556               	.global	booster_activate
+ 558               	booster_activate:
+ 152:booster.c     **** 	switch (booster_getState())
+ 560               	.LM73:
+ 561               	.LFBB7:
+ 562               	/* prologue: function */
+ 563               	/* frame size = 0 */
+ 564               	/* stack size = 0 */
+ 565               	.L__stack_usage = 0
+ 153:booster.c     **** 	{
+ 567               	.LM74:
+ 568 0150 0E94 0000 		call booster_getState
+ 569 0154 8231      		cpi r24,18
+ 570 0156 9105      		cpc r25,__zero_reg__
+ 571 0158 00F4      		brsh .L31
+ 572 015a 8031      		cpi r24,16
+ 573 015c 9105      		cpc r25,__zero_reg__
+ 574 015e 00F4      		brsh .L33
+ 575 0160 892B      		or r24,r25
+ 576 0162 01F0      		breq .L33
+ 577 0164 00C0      		rjmp .L30
+ 578               	.L31:
+ 579 0166 4297      		sbiw r24,18
+ 580 0168 01F4      		brne .L30
+ 167:booster.c     **** 			return 0;
+ 582               	.LM75:
+ 583 016a 4598      		cbi 0x8,5
+ 584 016c 00C0      		rjmp .L36
+ 585               	.L33:
+ 162:booster.c     **** 			return 1;
+ 587               	.LM76:
+ 588 016e 459A      		sbi 0x8,5
+ 163:booster.c     **** 			break;
+ 590               	.LM77:
+ 591 0170 81E0      		ldi r24,lo8(1)
+ 592 0172 0895      		ret
+ 593               	.L30:
+ 594               	.LBB18:
+ 595               	.LBB19:
+ 172:booster.c     **** 			booster_deactivate();
+ 597               	.LM78:
+ 598 0174 80E0      		ldi r24,lo8(.LC0)
+ 599 0176 90E0      		ldi r25,hi8(.LC0)
+ 600 0178 0E94 0000 		call error
+ 173:booster.c     **** 			return 0;
+ 602               	.LM79:
+ 603 017c 0E94 0000 		call booster_deactivate
+ 604               	.L36:
+ 605 0180 80E0      		ldi r24,0
+ 606               	.LBE19:
+ 607               	.LBE18:
+ 179:booster.c     **** 
+ 609               	.LM80:
+ 610 0182 0895      		ret
+ 612               	.Lscope7:
+ 613               		.section	.rodata.str1.1
+ 614               	.LC1:
+ 615 0024 4173 6B65 		.string	"Asked for Kick while Kicking"
+ 615      6420 666F 
+ 615      7220 4B69 
+ 615      636B 2077 
+ 615      6869 6C65 
+ 616               		.text
+ 618               	.global	booster_canKick
+ 620               	booster_canKick:
+ 187:booster.c     **** 	switch (booster_getState()) {
+ 622               	.LM81:
+ 623               	.LFBB8:
+ 624               	/* prologue: function */
+ 625               	/* frame size = 0 */
+ 626               	/* stack size = 0 */
+ 627               	.L__stack_usage = 0
+ 188:booster.c     **** 		case State_Activated:
+ 629               	.LM82:
+ 630 0184 0E94 0000 		call booster_getState
+ 631 0188 8031      		cpi r24,16
+ 632 018a 9105      		cpc r25,__zero_reg__
+ 633 018c 00F0      		brlo .L42
+ 634 018e 8231      		cpi r24,18
+ 635 0190 9105      		cpc r25,__zero_reg__
+ 636 0192 00F0      		brlo .L41
+ 637 0194 4297      		sbiw r24,18
+ 638 0196 01F4      		brne .L42
+ 195:booster.c     **** 			debug("Asked for Kick while Kicking");
+ 640               	.LM83:
+ 641 0198 0E94 0000 		call booster_reset
+ 196:booster.c     **** 			return 0;
+ 643               	.LM84:
+ 644 019c 80E0      		ldi r24,lo8(.LC1)
+ 645 019e 90E0      		ldi r25,hi8(.LC1)
+ 646 01a0 0E94 0000 		call debug
+ 647               	.L42:
+ 197:booster.c     **** 			break;
+ 649               	.LM85:
+ 650 01a4 80E0      		ldi r24,0
+ 651 01a6 0895      		ret
+ 652               	.L41:
+ 191:booster.c     **** 			break;
+ 654               	.LM86:
+ 655 01a8 81E0      		ldi r24,lo8(1)
+ 204:booster.c     **** 
+ 657               	.LM87:
+ 658 01aa 0895      		ret
+ 660               	.Lscope8:
+ 662               	.global	booster_getCapacitorVoltage
+ 664               	booster_getCapacitorVoltage:
+ 225:booster.c     **** 
+ 226:booster.c     **** uint16_t booster_getCapacitorVoltage()
+ 227:booster.c     **** {
+ 666               	.LM88:
+ 667               	.LFBB9:
+ 668               	/* prologue: function */
+ 669               	/* frame size = 0 */
+ 670               	/* stack size = 0 */
+ 671               	.L__stack_usage = 0
+ 228:booster.c     **** 	// factor = ADC-Ref-Voltage * Voltage-Divider / ADC-Resolution
+ 229:booster.c     **** 	static double factor = 0.328664; // 5.0 * 12587/187 / 1024;
+ 230:booster.c     **** 
+ 231:booster.c     **** 	double ret = adc_capacitor_raw * factor;
+ 673               	.LM89:
+ 674 01ac 6091 0000 		lds r22,adc_capacitor_raw
+ 675 01b0 7091 0000 		lds r23,adc_capacitor_raw+1
+ 676 01b4 80E0      		ldi r24,0
+ 677 01b6 90E0      		ldi r25,0
+ 678 01b8 0E94 0000 		call __floatunsisf
+ 679 01bc 26EA      		ldi r18,lo8(-90)
+ 680 01be 36E4      		ldi r19,lo8(70)
+ 681 01c0 48EA      		ldi r20,lo8(-88)
+ 682 01c2 5EE3      		ldi r21,lo8(62)
+ 683 01c4 0E94 0000 		call __mulsf3
+ 232:booster.c     **** 
+ 233:booster.c     **** 	return (uint16_t) ret; // * factor;
+ 685               	.LM90:
+ 686 01c8 0E94 0000 		call __fixunssfsi
+ 234:booster.c     **** }
+ 688               	.LM91:
+ 689 01cc CB01      		movw r24,r22
+ 690 01ce 0895      		ret
+ 692               	.Lscope9:
+ 693               		.section	.rodata.str1.1
+ 694               	.LC2:
+ 695 0041 4C3A 2025 		.string	"L: %d V"
+ 695      6420 5600 
+ 696               	.LC3:
+ 697 0049 423A 2025 		.string	"B: %d V"
+ 697      6420 5600 
+ 698               	.LC4:
+ 699 0051 433A 2025 		.string	"C: %d V"
+ 699      6420 5600 
+ 700               		.text
+ 702               	.global	booster_printVoltage
+ 704               	booster_printVoltage:
+ 235:booster.c     **** 
+ 236:booster.c     **** /**
+ 237:booster.c     ****  * Callback function which prints the actual capacitors message
+ 238:booster.c     ****  */
+ 239:booster.c     **** void booster_printVoltage() {
+ 706               	.LM92:
+ 707               	.LFBB10:
+ 708 01d0 0F93      		push r16
+ 709 01d2 1F93      		push r17
+ 710 01d4 CF93      		push r28
+ 711 01d6 DF93      		push r29
+ 712 01d8 CDB7      		in r28,__SP_L__
+ 713 01da DEB7      		in r29,__SP_H__
+ 714 01dc EC97      		sbiw r28,60
+ 715 01de 0FB6      		in __tmp_reg__,__SREG__
+ 716 01e0 F894      		cli
+ 717 01e2 DEBF      		out __SP_H__,r29
+ 718 01e4 0FBE      		out __SREG__,__tmp_reg__
+ 719 01e6 CDBF      		out __SP_L__,r28
+ 720               	/* prologue: function */
+ 721               	/* frame size = 60 */
+ 722               	/* stack size = 64 */
+ 723               	.L__stack_usage = 64
+ 240:booster.c     **** 	char str1[20];
+ 241:booster.c     **** 	sprintf(str1, "L: %d V", booster_getLogicVoltage());
+ 725               	.LM93:
+ 726 01e8 0E94 0000 		call booster_getLogicVoltage
+ 727 01ec 9F93      		push r25
+ 728 01ee 8F93      		push r24
+ 729 01f0 80E0      		ldi r24,lo8(.LC2)
+ 730 01f2 90E0      		ldi r25,hi8(.LC2)
+ 731 01f4 9F93      		push r25
+ 732 01f6 8F93      		push r24
+ 733 01f8 8E01      		movw r16,r28
+ 734 01fa 075D      		subi r16,-41
+ 735 01fc 1F4F      		sbci r17,-1
+ 736 01fe 1F93      		push r17
+ 737 0200 0F93      		push r16
+ 738 0202 0E94 0000 		call sprintf
+ 242:booster.c     **** 	debug(str1);
+ 740               	.LM94:
+ 741 0206 C801      		movw r24,r16
+ 742 0208 0E94 0000 		call debug
+ 243:booster.c     **** 
+ 244:booster.c     **** 	char str2[20];
+ 245:booster.c     **** 	sprintf(str2, "B: %d V", booster_getBoosterVoltage());
+ 744               	.LM95:
+ 745 020c 0E94 0000 		call booster_getBoosterVoltage
+ 746 0210 9F93      		push r25
+ 747 0212 8F93      		push r24
+ 748 0214 80E0      		ldi r24,lo8(.LC3)
+ 749 0216 90E0      		ldi r25,hi8(.LC3)
+ 750 0218 9F93      		push r25
+ 751 021a 8F93      		push r24
+ 752 021c 0451      		subi r16,20
+ 753 021e 1109      		sbc r17,__zero_reg__
+ 754 0220 1F93      		push r17
+ 755 0222 0F93      		push r16
+ 756 0224 0E94 0000 		call sprintf
+ 246:booster.c     **** 	debug(str2);
+ 758               	.LM96:
+ 759 0228 C801      		movw r24,r16
+ 760 022a 0E94 0000 		call debug
+ 247:booster.c     **** 
+ 248:booster.c     **** 	char str3[20];
+ 249:booster.c     **** 	sprintf(str3, "C: %d V", booster_getCapacitorVoltage());
+ 762               	.LM97:
+ 763 022e 0E94 0000 		call booster_getCapacitorVoltage
+ 764 0232 9F93      		push r25
+ 765 0234 8F93      		push r24
+ 766 0236 80E0      		ldi r24,lo8(.LC4)
+ 767 0238 90E0      		ldi r25,hi8(.LC4)
+ 768 023a 9F93      		push r25
+ 769 023c 8F93      		push r24
+ 770 023e 0451      		subi r16,20
+ 771 0240 1109      		sbc r17,__zero_reg__
+ 772 0242 1F93      		push r17
+ 773 0244 0F93      		push r16
+ 774 0246 0E94 0000 		call sprintf
+ 250:booster.c     **** 	debug(str3);
+ 776               	.LM98:
+ 777 024a C801      		movw r24,r16
+ 778 024c 0E94 0000 		call debug
+ 779 0250 0FB6      		in __tmp_reg__,__SREG__
+ 780 0252 F894      		cli
+ 781 0254 DEBF      		out __SP_H__,r29
+ 782 0256 0FBE      		out __SREG__,__tmp_reg__
+ 783 0258 CDBF      		out __SP_L__,r28
+ 784               	/* epilogue start */
+ 251:booster.c     **** }
+ 786               	.LM99:
+ 787 025a EC96      		adiw r28,60
+ 788 025c 0FB6      		in __tmp_reg__,__SREG__
+ 789 025e F894      		cli
+ 790 0260 DEBF      		out __SP_H__,r29
+ 791 0262 0FBE      		out __SREG__,__tmp_reg__
+ 792 0264 CDBF      		out __SP_L__,r28
+ 793 0266 DF91      		pop r29
+ 794 0268 CF91      		pop r28
+ 795 026a 1F91      		pop r17
+ 796 026c 0F91      		pop r16
+ 797 026e 0895      		ret
+ 804               	.Lscope10:
+ 806               	.global	booster_sendInfo
+ 808               	booster_sendInfo:
+ 252:booster.c     **** 
+ 253:booster.c     **** void booster_sendInfo() {
+ 810               	.LM100:
+ 811               	.LFBB11:
+ 812 0270 CF93      		push r28
+ 813 0272 DF93      		push r29
+ 814 0274 00D0      		rcall .
+ 815 0276 00D0      		rcall .
+ 816 0278 00D0      		rcall .
+ 817 027a CDB7      		in r28,__SP_L__
+ 818 027c DEB7      		in r29,__SP_H__
+ 819               	/* prologue: function */
+ 820               	/* frame size = 6 */
+ 821               	/* stack size = 8 */
+ 822               	.L__stack_usage = 8
+ 254:booster.c     **** 	struct BOOSTER_INFO info;
+ 255:booster.c     **** 
+ 256:booster.c     **** 	info.state = booster_getState();
+ 824               	.LM101:
+ 825 027e 0E94 0000 		call booster_getState
+ 826 0282 9A83      		std Y+2,r25
+ 827 0284 8983      		std Y+1,r24
+ 257:booster.c     **** 	info.supply_voltage = booster_getBoosterVoltage();
+ 829               	.LM102:
+ 830 0286 0E94 0000 		call booster_getBoosterVoltage
+ 831 028a 9C83      		std Y+4,r25
+ 832 028c 8B83      		std Y+3,r24
+ 258:booster.c     **** 	info.capacitors_voltage = booster_getCapacitorVoltage();
+ 834               	.LM103:
+ 835 028e 0E94 0000 		call booster_getCapacitorVoltage
+ 836 0292 9E83      		std Y+6,r25
+ 837 0294 8D83      		std Y+5,r24
+ 259:booster.c     **** 
+ 260:booster.c     **** 	prepareMsg(CMD_STATE, (uint8_t *)&info, 5, PRIORITY_NORM);
+ 839               	.LM104:
+ 840 0296 20E4      		ldi r18,lo8(64)
+ 841 0298 45E0      		ldi r20,lo8(5)
+ 842 029a BE01      		movw r22,r28
+ 843 029c 6F5F      		subi r22,-1
+ 844 029e 7F4F      		sbci r23,-1
+ 845 02a0 82EF      		ldi r24,lo8(-14)
+ 846 02a2 0E94 0000 		call prepareMsg
+ 847               	/* epilogue start */
+ 261:booster.c     **** }
+ 849               	.LM105:
+ 850 02a6 2696      		adiw r28,6
+ 851 02a8 0FB6      		in __tmp_reg__,__SREG__
+ 852 02aa F894      		cli
+ 853 02ac DEBF      		out __SP_H__,r29
+ 854 02ae 0FBE      		out __SREG__,__tmp_reg__
+ 855 02b0 CDBF      		out __SP_L__,r28
+ 856 02b2 DF91      		pop r29
+ 857 02b4 CF91      		pop r28
+ 858 02b6 0895      		ret
+ 863               	.Lscope11:
+ 866               	.global	booster_setLogicRawVoltage
+ 868               	booster_setLogicRawVoltage:
+ 262:booster.c     **** 
+ 263:booster.c     **** void booster_setLogicRawVoltage(uint16_t voltage)
+ 264:booster.c     **** {
+ 870               	.LM106:
+ 871               	.LFBB12:
+ 872               	/* prologue: function */
+ 873               	/* frame size = 0 */
+ 874               	/* stack size = 0 */
+ 875               	.L__stack_usage = 0
+ 265:booster.c     **** 	adc_logic_raw = voltage;
+ 877               	.LM107:
+ 878 02b8 9093 0000 		sts adc_logic_raw+1,r25
+ 879 02bc 8093 0000 		sts adc_logic_raw,r24
+ 880 02c0 0895      		ret
+ 882               	.Lscope12:
+ 885               	.global	booster_setBoosterRawVoltage
+ 887               	booster_setBoosterRawVoltage:
+ 266:booster.c     **** }
+ 267:booster.c     **** 
+ 268:booster.c     **** void booster_setBoosterRawVoltage(uint16_t voltage)
+ 269:booster.c     **** {
+ 889               	.LM108:
+ 890               	.LFBB13:
+ 891               	/* prologue: function */
+ 892               	/* frame size = 0 */
+ 893               	/* stack size = 0 */
+ 894               	.L__stack_usage = 0
+ 270:booster.c     **** 	adc_booster_raw = voltage;
+ 896               	.LM109:
+ 897 02c2 9093 0000 		sts adc_booster_raw+1,r25
+ 898 02c6 8093 0000 		sts adc_booster_raw,r24
+ 899 02ca 0895      		ret
+ 901               	.Lscope13:
+ 904               	.global	booster_setCapacitorRawVoltage
+ 906               	booster_setCapacitorRawVoltage:
+ 271:booster.c     **** }
+ 272:booster.c     **** 
+ 273:booster.c     **** void booster_setCapacitorRawVoltage(uint16_t voltage)
+ 274:booster.c     **** {
+ 908               	.LM110:
+ 909               	.LFBB14:
+ 910               	/* prologue: function */
+ 911               	/* frame size = 0 */
+ 912               	/* stack size = 0 */
+ 913               	.L__stack_usage = 0
+ 275:booster.c     **** 	adc_capacitor_raw = voltage;
+ 915               	.LM111:
+ 916 02cc 9093 0000 		sts adc_capacitor_raw+1,r25
+ 917 02d0 8093 0000 		sts adc_capacitor_raw,r24
+ 918 02d4 0895      		ret
+ 920               	.Lscope14:
+ 921               		.section	.rodata.str1.1
+ 922               	.LC5:
+ 923 0059 566F 6C74 		.string	"Voltage to high"
+ 923      6167 6520 
+ 923      746F 2068 
+ 923      6967 6800 
+ 924               		.text
+ 927               	.global	booster_setMaxVoltage
+ 929               	booster_setMaxVoltage:
+ 276:booster.c     **** }
+ 277:booster.c     **** 
+ 278:booster.c     **** void booster_setMaxVoltage(uint16_t voltage)
+ 279:booster.c     **** {
+ 931               	.LM112:
+ 932               	.LFBB15:
+ 933               	/* prologue: function */
+ 934               	/* frame size = 0 */
+ 935               	/* stack size = 0 */
+ 936               	.L__stack_usage = 0
+ 280:booster.c     **** 	if(voltage > MAX_VOLTAGE)
+ 938               	.LM113:
+ 939 02d6 8B34      		cpi r24,75
+ 940 02d8 21E0      		ldi r18,1
+ 941 02da 9207      		cpc r25,r18
+ 942 02dc 00F0      		brlo .L50
+ 281:booster.c     **** 	{
+ 282:booster.c     **** 		error("Voltage to high");
+ 944               	.LM114:
+ 945 02de 80E0      		ldi r24,lo8(.LC5)
+ 946 02e0 90E0      		ldi r25,hi8(.LC5)
+ 947 02e2 0E94 0000 		call error
+ 283:booster.c     **** 		voltage = MAX_VOLTAGE;
+ 949               	.LM115:
+ 950 02e6 8AE4      		ldi r24,lo8(74)
+ 951 02e8 91E0      		ldi r25,lo8(1)
+ 952               	.L50:
+ 284:booster.c     **** 	}
+ 285:booster.c     **** 
+ 286:booster.c     **** 	desired_voltage = voltage;
+ 954               	.LM116:
+ 955 02ea 9093 0000 		sts desired_voltage+1,r25
+ 956 02ee 8093 0000 		sts desired_voltage,r24
+ 957 02f2 0895      		ret
+ 959               	.Lscope15:
+ 960               		.section	.rodata.str1.1
+ 961               	.LC6:
+ 962 0069 4F76 6572 		.string	"Overvoltage. Software detected."
+ 962      766F 6C74 
+ 962      6167 652E 
+ 962      2053 6F66 
+ 962      7477 6172 
+ 963               	.global	__addsf3
+ 964               	.global	__gesf2
+ 965               	.global	__subsf3
+ 966               	.global	__lesf2
+ 967               	.LC7:
+ 968 0089 4B69 636B 		.string	"Kicking"
+ 968      696E 6700 
+ 969               	.LC8:
+ 970 0091 566F 6C74 		.string	"Voltage: 0x%02X"
+ 970      6167 653A 
+ 970      2030 7825 
+ 970      3032 5800 
+ 971               	.LC9:
+ 972 00a1 3E3E 4572 		.string	">>Error: 0x%02X"
+ 972      726F 723A 
+ 972      2030 7825 
+ 972      3032 5800 
+ 973               	.LC10:
+ 974 00b1 3E3E 4553 		.string	">>ES: 0x%02X"
+ 974      3A20 3078 
+ 974      2530 3258 
+ 974      00
+ 975               	.LC11:
+ 976 00be 5265 7365 		.string	"Reset"
+ 976      7400 
+ 977               	.LC12:
+ 978 00c4 5374 6174 		.string	"State should not be reached: 0x%02X"
+ 978      6520 7368 
+ 978      6F75 6C64 
+ 978      206E 6F74 
+ 978      2062 6520 
+ 979               	.LC13:
+ 980 00e8 556E 6B6E 		.string	"Unknown State"
+ 980      6F77 6E20 
+ 980      5374 6174 
+ 980      6500 
+ 981               		.text
+ 983               	.global	booster_ctrl
+ 985               	booster_ctrl:
+ 287:booster.c     **** }
+ 288:booster.c     **** 
+ 289:booster.c     **** void booster_ctrl()
+ 290:booster.c     **** {
+ 987               	.LM117:
+ 988               	.LFBB16:
+ 989 02f4 4F92      		push r4
+ 990 02f6 5F92      		push r5
+ 991 02f8 6F92      		push r6
+ 992 02fa 7F92      		push r7
+ 993 02fc 8F92      		push r8
+ 994 02fe 9F92      		push r9
+ 995 0300 AF92      		push r10
+ 996 0302 BF92      		push r11
+ 997 0304 CF92      		push r12
+ 998 0306 DF92      		push r13
+ 999 0308 FF92      		push r15
+ 1000 030a 0F93      		push r16
+ 1001 030c 1F93      		push r17
+ 1002 030e CF93      		push r28
+ 1003 0310 DF93      		push r29
+ 1004 0312 CDB7      		in r28,__SP_L__
+ 1005 0314 DEB7      		in r29,__SP_H__
+ 1006 0316 A297      		sbiw r28,34
+ 1007 0318 0FB6      		in __tmp_reg__,__SREG__
+ 1008 031a F894      		cli
+ 1009 031c DEBF      		out __SP_H__,r29
+ 1010 031e 0FBE      		out __SREG__,__tmp_reg__
+ 1011 0320 CDBF      		out __SP_L__,r28
+ 1012               	/* prologue: function */
+ 1013               	/* frame size = 34 */
+ 1014               	/* stack size = 49 */
+ 1015               	.L__stack_usage = 49
+ 291:booster.c     **** 	uint32_t time_now;
+ 292:booster.c     **** 	timer_get_ms(&time_now);
+ 1017               	.LM118:
+ 1018 0322 CE01      		movw r24,r28
+ 1019 0324 4F96      		adiw r24,31
+ 1020 0326 0E94 0000 		call timer_get_ms
+ 293:booster.c     **** 	char message[30];
+ 294:booster.c     **** 
+ 295:booster.c     **** 	enum eState state = booster_getState();
+ 1022               	.LM119:
+ 1023 032a 0E94 0000 		call booster_getState
+ 1024 032e 8C01      		movw r16,r24
+ 296:booster.c     **** 	static enum eState state_old;
+ 297:booster.c     **** 
+ 298:booster.c     **** 	bool errorFlag = false;
+ 299:booster.c     **** 
+ 300:booster.c     **** 	switch(state)
+ 1026               	.LM120:
+ 1027 0330 8332      		cpi r24,35
+ 1028 0332 9105      		cpc r25,__zero_reg__
+ 1029 0334 00F4      		brsh .L53
+ 1030 0336 8032      		cpi r24,32
+ 1031 0338 9105      		cpc r25,__zero_reg__
+ 1032 033a 00F0      		brlo .+2
+ 1033 033c 00C0      		rjmp .L54
+ 1034 033e 8330      		cpi r24,3
+ 1035 0340 9105      		cpc r25,__zero_reg__
+ 1036 0342 00F4      		brsh .L55
+ 1037 0344 8130      		cpi r24,1
+ 1038 0346 9105      		cpc r25,__zero_reg__
+ 1039 0348 00F4      		brsh .+2
+ 1040 034a 00C0      		rjmp .L81
+ 1041               	.LBB20:
+ 301:booster.c     **** 	{
+ 302:booster.c     **** 		case State_Deactivated:
+ 303:booster.c     **** 			break;
+ 304:booster.c     **** 
+ 305:booster.c     **** 		case State_Activated:
+ 306:booster.c     **** 		case State_ActivatedHold:
+ 307:booster.c     **** 			if (time_now - last_heartbeat < PING_TIMEOUT || mode == Mode_Manual) {
+ 308:booster.c     **** 				uint16_t capacitor_voltage = booster_getCapacitorVoltage();
+ 309:booster.c     **** 				if (booster_getCapacitorVoltage() > MAX_VOLTAGE + 15) {
+ 310:booster.c     **** 					errorFlag = true;
+ 311:booster.c     **** 					sprintf(message, "Overvoltage. Software detected.");
+ 312:booster.c     **** 					booster_deactivate();
+ 313:booster.c     **** 					mode = Mode_ErrorCap;
+ 314:booster.c     **** 				}
+ 315:booster.c     **** 
+ 316:booster.c     **** 				if (mode == Mode_SoftwareControlled || mode == Mode_SoftwareControlledHold) {
+ 317:booster.c     **** 					if (capacitor_voltage >= desired_voltage + 0.5)
+ 318:booster.c     **** 						booster_deactivate();
+ 319:booster.c     **** 					else if (capacitor_voltage <= desired_voltage - 0.5)
+ 320:booster.c     **** 						booster_activate();
+ 321:booster.c     **** 				} else {
+ 322:booster.c     **** 					booster_activate();
+ 323:booster.c     **** 				}
+ 324:booster.c     **** 			} else {
+ 325:booster.c     **** 				booster_deactivate();
+ 326:booster.c     **** 			}
+ 327:booster.c     **** 			break;
+ 328:booster.c     **** 
+ 329:booster.c     **** 		case State_ActivatedKicking:
+ 330:booster.c     **** 			sprintf(message, "Kicking");
+ 331:booster.c     **** 			break;
+ 332:booster.c     **** 
+ 333:booster.c     **** 		case State_VoltageLow:
+ 334:booster.c     **** 		case State_VoltageLowLogic:
+ 335:booster.c     **** 		case State_VoltageLowBooster:
+ 336:booster.c     **** 			sprintf(message, "Voltage: 0x%02X", state);
+ 337:booster.c     **** 			booster_deactivate();
+ 338:booster.c     **** 			break;
+ 339:booster.c     **** 
+ 340:booster.c     **** 		case State_Error:
+ 341:booster.c     **** 		case State_Error_CAP_OVLO:
+ 342:booster.c     **** 			errorFlag = true;
+ 343:booster.c     **** 			sprintf(message, ">>Error: 0x%02X", state);
+ 1043               	.LM121:
+ 1044 034c 1F93      		push r17
+ 1045 034e 8F93      		push r24
+ 1046 0350 80E0      		ldi r24,lo8(.LC9)
+ 1047 0352 90E0      		ldi r25,hi8(.LC9)
+ 1048 0354 9F93      		push r25
+ 1049 0356 8F93      		push r24
+ 1050 0358 CE01      		movw r24,r28
+ 1051 035a 0196      		adiw r24,1
+ 1052 035c 00C0      		rjmp .L88
+ 1053               	.L55:
+ 1054               	.LBE20:
+ 300:booster.c     **** 	{
+ 1056               	.LM122:
+ 1057 035e 8031      		cpi r24,16
+ 1058 0360 9105      		cpc r25,__zero_reg__
+ 1059 0362 00F4      		brsh .+2
+ 1060 0364 00C0      		rjmp .L52
+ 1061 0366 8231      		cpi r24,18
+ 1062 0368 9105      		cpc r25,__zero_reg__
+ 1063 036a 00F0      		brlo .L58
+ 1064 036c 4297      		sbiw r24,18
+ 1065 036e 01F0      		breq .+2
+ 1066 0370 00C0      		rjmp .L52
+ 1067               	.LBB24:
+ 330:booster.c     **** 			break;
+ 1069               	.LM123:
+ 1070 0372 60E0      		ldi r22,lo8(.LC7)
+ 1071 0374 70E0      		ldi r23,hi8(.LC7)
+ 1072 0376 CE01      		movw r24,r28
+ 1073 0378 0196      		adiw r24,1
+ 1074 037a 0E94 0000 		call strcpy
+ 1075 037e 00C0      		rjmp .L81
+ 1076               	.L53:
+ 1077 0380 CE01      		movw r24,r28
+ 1078 0382 0196      		adiw r24,1
+ 1079               	.LBE24:
+ 300:booster.c     **** 	{
+ 1081               	.LM124:
+ 1082 0384 0E3E      		cpi r16,-18
+ 1083 0386 1105      		cpc r17,__zero_reg__
+ 1084 0388 01F4      		brne .+2
+ 1085 038a 00C0      		rjmp .L60
+ 1086 038c 9801      		movw r18,r16
+ 1087 038e 0F3E      		cpi r16,-17
+ 1088 0390 1105      		cpc r17,__zero_reg__
+ 1089 0392 00F4      		brsh .L61
+ 1090 0394 205E      		subi r18,-32
+ 1091 0396 3109      		sbc r19,__zero_reg__
+ 1092 0398 2230      		cpi r18,2
+ 1093 039a 3105      		cpc r19,__zero_reg__
+ 1094 039c 00F0      		brlo .+2
+ 1095 039e 00C0      		rjmp .L52
+ 1096               	.LBB25:
+ 344:booster.c     **** 			booster_deactivate();
+ 345:booster.c     **** 			break;
+ 346:booster.c     **** 
+ 347:booster.c     **** 		case State_EmergencyTriggered:
+ 348:booster.c     **** 		case State_EmergencyShutdown:
+ 349:booster.c     **** 			errorFlag = true;
+ 350:booster.c     **** 			sprintf(message, ">>ES: 0x%02X", state);
+ 1098               	.LM125:
+ 1099 03a0 1F93      		push r17
+ 1100 03a2 0F93      		push r16
+ 1101 03a4 20E0      		ldi r18,lo8(.LC10)
+ 1102 03a6 30E0      		ldi r19,hi8(.LC10)
+ 1103 03a8 00C0      		rjmp .L89
+ 1104               	.L61:
+ 1105               	.LBE25:
+ 300:booster.c     **** 	{
+ 1107               	.LM126:
+ 1108 03aa 205F      		subi r18,-16
+ 1109 03ac 3109      		sbc r19,__zero_reg__
+ 1110 03ae 2230      		cpi r18,2
+ 1111 03b0 3105      		cpc r19,__zero_reg__
+ 1112 03b2 00F0      		brlo .+2
+ 1113 03b4 00C0      		rjmp .L52
+ 1114               	.LBB26:
+ 351:booster.c     **** 			booster_deactivate();
+ 352:booster.c     **** 			break;
+ 353:booster.c     **** 
+ 354:booster.c     **** 		case State_EmergencyReset:
+ 355:booster.c     **** 			errorFlag = true;
+ 356:booster.c     **** 			sprintf(message, "Reset");
+ 357:booster.c     **** 			booster_deactivate();
+ 358:booster.c     **** 			break;
+ 359:booster.c     **** 
+ 360:booster.c     **** 
+ 361:booster.c     **** 		// Should never be reached
+ 362:booster.c     **** 		case State_False:
+ 363:booster.c     **** 		case State_FalseKick:
+ 364:booster.c     **** 			errorFlag = true;
+ 365:booster.c     **** 			sprintf(message, "State should not be reached: 0x%02X", state);
+ 1116               	.LM127:
+ 1117 03b6 1F93      		push r17
+ 1118 03b8 0F93      		push r16
+ 1119 03ba 20E0      		ldi r18,lo8(.LC12)
+ 1120 03bc 30E0      		ldi r19,hi8(.LC12)
+ 1121 03be 00C0      		rjmp .L89
+ 1122               	.L58:
+ 307:booster.c     **** 				uint16_t capacitor_voltage = booster_getCapacitorVoltage();
+ 1124               	.LM128:
+ 1125 03c0 8F8D      		ldd r24,Y+31
+ 1126 03c2 98A1      		ldd r25,Y+32
+ 1127 03c4 A9A1      		ldd r26,Y+33
+ 1128 03c6 BAA1      		ldd r27,Y+34
+ 1129 03c8 4091 0000 		lds r20,last_heartbeat
+ 1130 03cc 5091 0000 		lds r21,last_heartbeat+1
+ 1131 03d0 6091 0000 		lds r22,last_heartbeat+2
+ 1132 03d4 7091 0000 		lds r23,last_heartbeat+3
+ 1133 03d8 841B      		sub r24,r20
+ 1134 03da 950B      		sbc r25,r21
+ 1135 03dc A60B      		sbc r26,r22
+ 1136 03de B70B      		sbc r27,r23
+ 1137 03e0 883E      		cpi r24,-24
+ 1138 03e2 9340      		sbci r25,3
+ 1139 03e4 A105      		cpc r26,__zero_reg__
+ 1140 03e6 B105      		cpc r27,__zero_reg__
+ 1141 03e8 00F0      		brlo .L64
+ 307:booster.c     **** 				uint16_t capacitor_voltage = booster_getCapacitorVoltage();
+ 1143               	.LM129:
+ 1144 03ea 8091 0000 		lds r24,mode
+ 1145 03ee 8330      		cpi r24,lo8(3)
+ 1146 03f0 01F0      		breq .+2
+ 1147 03f2 00C0      		rjmp .L65
+ 1148               	.L64:
+ 1149               	.LBB21:
+ 308:booster.c     **** 				if (booster_getCapacitorVoltage() > MAX_VOLTAGE + 15) {
+ 1151               	.LM130:
+ 1152 03f4 0E94 0000 		call booster_getCapacitorVoltage
+ 1153 03f8 6C01      		movw r12,r24
+ 309:booster.c     **** 					errorFlag = true;
+ 1155               	.LM131:
+ 1156 03fa 0E94 0000 		call booster_getCapacitorVoltage
+ 1157 03fe 8A35      		cpi r24,90
+ 1158 0400 9140      		sbci r25,1
+ 1159 0402 00F0      		brlo .L78
+ 1160               	.LBB22:
+ 311:booster.c     **** 					booster_deactivate();
+ 1162               	.LM132:
+ 1163 0404 60E0      		ldi r22,lo8(.LC6)
+ 1164 0406 70E0      		ldi r23,hi8(.LC6)
+ 1165 0408 CE01      		movw r24,r28
+ 1166 040a 0196      		adiw r24,1
+ 1167 040c 0E94 0000 		call strcpy
+ 312:booster.c     **** 					mode = Mode_ErrorCap;
+ 1169               	.LM133:
+ 1170 0410 0E94 0000 		call booster_deactivate
+ 313:booster.c     **** 				}
+ 1172               	.LM134:
+ 1173 0414 86E0      		ldi r24,lo8(6)
+ 1174 0416 8093 0000 		sts mode,r24
+ 310:booster.c     **** 					sprintf(message, "Overvoltage. Software detected.");
+ 1176               	.LM135:
+ 1177 041a FF24      		clr r15
+ 1178 041c F394      		inc r15
+ 1179 041e 00C0      		rjmp .L66
+ 1180               	.L78:
+ 1181               	.LBE22:
+ 1182               	.LBE21:
+ 1183               	.LBE26:
+ 298:booster.c     **** 
+ 1185               	.LM136:
+ 1186 0420 F12C      		mov r15,__zero_reg__
+ 1187               	.L66:
+ 1188               	.LBB27:
+ 1189               	.LBB23:
+ 316:booster.c     **** 					if (capacitor_voltage >= desired_voltage + 0.5)
+ 1191               	.LM137:
+ 1192 0422 8091 0000 		lds r24,mode
+ 1193 0426 8150      		subi r24,lo8(-(-1))
+ 1194 0428 8230      		cpi r24,lo8(2)
+ 1195 042a 00F4      		brsh .L67
+ 317:booster.c     **** 						booster_deactivate();
+ 1197               	.LM138:
+ 1198 042c B601      		movw r22,r12
+ 1199 042e 80E0      		ldi r24,0
+ 1200 0430 90E0      		ldi r25,0
+ 1201 0432 0E94 0000 		call __floatunsisf
+ 1202 0436 4B01      		movw r8,r22
+ 1203 0438 5C01      		movw r10,r24
+ 1204 043a 8091 0000 		lds r24,desired_voltage
+ 1205 043e 9091 0000 		lds r25,desired_voltage+1
+ 1206 0442 BC01      		movw r22,r24
+ 1207 0444 80E0      		ldi r24,0
+ 1208 0446 90E0      		ldi r25,0
+ 1209 0448 0E94 0000 		call __floatunsisf
+ 1210 044c 2B01      		movw r4,r22
+ 1211 044e 3C01      		movw r6,r24
+ 1212 0450 20E0      		ldi r18,0
+ 1213 0452 30E0      		ldi r19,0
+ 1214 0454 40E0      		ldi r20,0
+ 1215 0456 5FE3      		ldi r21,lo8(63)
+ 1216 0458 0E94 0000 		call __addsf3
+ 1217 045c 9B01      		movw r18,r22
+ 1218 045e AC01      		movw r20,r24
+ 1219 0460 C501      		movw r24,r10
+ 1220 0462 B401      		movw r22,r8
+ 1221 0464 0E94 0000 		call __gesf2
+ 1222 0468 87FD      		sbrc r24,7
+ 1223 046a 00C0      		rjmp .L84
+ 318:booster.c     **** 					else if (capacitor_voltage <= desired_voltage - 0.5)
+ 1225               	.LM139:
+ 1226 046c 0E94 0000 		call booster_deactivate
+ 1227 0470 00C0      		rjmp .L57
+ 1228               	.L84:
+ 319:booster.c     **** 						booster_activate();
+ 1230               	.LM140:
+ 1231 0472 20E0      		ldi r18,0
+ 1232 0474 30E0      		ldi r19,0
+ 1233 0476 40E0      		ldi r20,0
+ 1234 0478 5FE3      		ldi r21,lo8(63)
+ 1235 047a C301      		movw r24,r6
+ 1236 047c B201      		movw r22,r4
+ 1237 047e 0E94 0000 		call __subsf3
+ 1238 0482 9B01      		movw r18,r22
+ 1239 0484 AC01      		movw r20,r24
+ 1240 0486 C501      		movw r24,r10
+ 1241 0488 B401      		movw r22,r8
+ 1242 048a 0E94 0000 		call __lesf2
+ 1243 048e 1816      		cp __zero_reg__,r24
+ 1244 0490 04F0      		brlt .L57
+ 1245               	.L67:
+ 322:booster.c     **** 				}
+ 1247               	.LM141:
+ 1248 0492 0E94 0000 		call booster_activate
+ 1249 0496 00C0      		rjmp .L57
+ 1250               	.L65:
+ 1251               	.LBE23:
+ 325:booster.c     **** 			}
+ 1253               	.LM142:
+ 1254 0498 0E94 0000 		call booster_deactivate
+ 1255 049c 00C0      		rjmp .L81
+ 1256               	.L54:
+ 336:booster.c     **** 			booster_deactivate();
+ 1258               	.LM143:
+ 1259 049e 1F93      		push r17
+ 1260 04a0 8F93      		push r24
+ 1261 04a2 80E0      		ldi r24,lo8(.LC8)
+ 1262 04a4 90E0      		ldi r25,hi8(.LC8)
+ 1263 04a6 9F93      		push r25
+ 1264 04a8 8F93      		push r24
+ 1265 04aa CE01      		movw r24,r28
+ 1266 04ac 0196      		adiw r24,1
+ 1267 04ae 9F93      		push r25
+ 1268 04b0 8F93      		push r24
+ 1269 04b2 0E94 0000 		call sprintf
+ 337:booster.c     **** 			break;
+ 1271               	.LM144:
+ 1272 04b6 0E94 0000 		call booster_deactivate
+ 338:booster.c     **** 
+ 1274               	.LM145:
+ 1275 04ba 0F90      		pop __tmp_reg__
+ 1276 04bc 0F90      		pop __tmp_reg__
+ 1277 04be 0F90      		pop __tmp_reg__
+ 1278 04c0 0F90      		pop __tmp_reg__
+ 1279 04c2 0F90      		pop __tmp_reg__
+ 1280 04c4 0F90      		pop __tmp_reg__
+ 1281 04c6 00C0      		rjmp .L81
+ 1282               	.L60:
+ 356:booster.c     **** 			booster_deactivate();
+ 1284               	.LM146:
+ 1285 04c8 60E0      		ldi r22,lo8(.LC11)
+ 1286 04ca 70E0      		ldi r23,hi8(.LC11)
+ 1287 04cc 00C0      		rjmp .L86
+ 1288               	.L89:
+ 1290               	.LM147:
+ 1291 04ce 3F93      		push r19
+ 1292 04d0 2F93      		push r18
+ 1293               	.L88:
+ 1294 04d2 9F93      		push r25
+ 1295 04d4 8F93      		push r24
+ 1296 04d6 0E94 0000 		call sprintf
+ 366:booster.c     **** 			booster_deactivate();
+ 1298               	.LM148:
+ 1299 04da 0E94 0000 		call booster_deactivate
+ 367:booster.c     **** 			break;
+ 1301               	.LM149:
+ 1302 04de 0F90      		pop __tmp_reg__
+ 1303 04e0 0F90      		pop __tmp_reg__
+ 1304 04e2 0F90      		pop __tmp_reg__
+ 1305 04e4 0F90      		pop __tmp_reg__
+ 1306 04e6 0F90      		pop __tmp_reg__
+ 1307 04e8 0F90      		pop __tmp_reg__
+ 1308 04ea 00C0      		rjmp .L85
+ 1309               	.L52:
+ 368:booster.c     **** 
+ 369:booster.c     **** 		default:
+ 370:booster.c     **** 			errorFlag = true;
+ 371:booster.c     **** 			sprintf(message, "Unknown State");
+ 1311               	.LM150:
+ 1312 04ec 60E0      		ldi r22,lo8(.LC13)
+ 1313 04ee 70E0      		ldi r23,hi8(.LC13)
+ 1314 04f0 CE01      		movw r24,r28
+ 1315 04f2 0196      		adiw r24,1
+ 1316               	.L86:
+ 1317 04f4 0E94 0000 		call strcpy
+ 372:booster.c     **** 			booster_deactivate();
+ 1319               	.LM151:
+ 1320 04f8 0E94 0000 		call booster_deactivate
+ 1321               	.L85:
+ 370:booster.c     **** 			sprintf(message, "Unknown State");
+ 1323               	.LM152:
+ 1324 04fc FF24      		clr r15
+ 1325 04fe F394      		inc r15
+ 373:booster.c     **** 			break;
+ 1327               	.LM153:
+ 1328 0500 00C0      		rjmp .L57
+ 1329               	.L81:
+ 1330               	.LBE27:
+ 298:booster.c     **** 
+ 1332               	.LM154:
+ 1333 0502 F12C      		mov r15,__zero_reg__
+ 1334               	.L57:
+ 374:booster.c     **** 	}
+ 375:booster.c     **** 
+ 376:booster.c     **** 
+ 377:booster.c     **** 	// Handler that Messages don't Spam on CAN
+ 378:booster.c     **** 	static uint32_t time_msgLastSended = 0;
+ 379:booster.c     **** 	if(state == state_old) {
+ 1336               	.LM155:
+ 1337 0504 8091 0000 		lds r24,state_old.1973
+ 1338 0508 9091 0000 		lds r25,state_old.1973+1
+ 1339 050c 0817      		cp r16,r24
+ 1340 050e 1907      		cpc r17,r25
+ 1341 0510 01F4      		brne .L71
+ 380:booster.c     **** 		if(time_now - time_msgLastSended > 1000) {
+ 1343               	.LM156:
+ 1344 0512 8F8D      		ldd r24,Y+31
+ 1345 0514 98A1      		ldd r25,Y+32
+ 1346 0516 A9A1      		ldd r26,Y+33
+ 1347 0518 BAA1      		ldd r27,Y+34
+ 1348 051a 4091 0000 		lds r20,time_msgLastSended.1994
+ 1349 051e 5091 0000 		lds r21,time_msgLastSended.1994+1
+ 1350 0522 6091 0000 		lds r22,time_msgLastSended.1994+2
+ 1351 0526 7091 0000 		lds r23,time_msgLastSended.1994+3
+ 1352 052a 841B      		sub r24,r20
+ 1353 052c 950B      		sbc r25,r21
+ 1354 052e A60B      		sbc r26,r22
+ 1355 0530 B70B      		sbc r27,r23
+ 1356 0532 893E      		cpi r24,-23
+ 1357 0534 9340      		sbci r25,3
+ 1358 0536 A105      		cpc r26,__zero_reg__
+ 1359 0538 B105      		cpc r27,__zero_reg__
+ 1360 053a 00F0      		brlo .L51
+ 381:booster.c     **** 			// Send same Message once every Second
+ 382:booster.c     **** 			if(errorFlag)
+ 383:booster.c     **** 				error(message);
+ 1362               	.LM157:
+ 1363 053c CE01      		movw r24,r28
+ 1364 053e 0196      		adiw r24,1
+ 382:booster.c     **** 				error(message);
+ 1366               	.LM158:
+ 1367 0540 FF20      		tst r15
+ 1368 0542 01F0      		breq .L73
+ 1370               	.LM159:
+ 1371 0544 0E94 0000 		call error
+ 1372 0548 00C0      		rjmp .L87
+ 1373               	.L73:
+ 384:booster.c     **** 			else
+ 385:booster.c     **** 				debug(message);
+ 1375               	.LM160:
+ 1376 054a 0E94 0000 		call debug
+ 1377 054e 00C0      		rjmp .L87
+ 1378               	.L71:
+ 386:booster.c     **** 			time_msgLastSended = time_now;
+ 387:booster.c     **** 		}
+ 388:booster.c     **** 	} else {
+ 389:booster.c     **** 		if(errorFlag)
+ 390:booster.c     **** 			error(message);
+ 1380               	.LM161:
+ 1381 0550 CE01      		movw r24,r28
+ 1382 0552 0196      		adiw r24,1
+ 389:booster.c     **** 			error(message);
+ 1384               	.LM162:
+ 1385 0554 FF20      		tst r15
+ 1386 0556 01F0      		breq .L75
+ 1388               	.LM163:
+ 1389 0558 0E94 0000 		call error
+ 1390 055c 00C0      		rjmp .L76
+ 1391               	.L75:
+ 391:booster.c     **** 		else
+ 392:booster.c     **** 			debug(message);
+ 1393               	.LM164:
+ 1394 055e 0E94 0000 		call debug
+ 1395               	.L76:
+ 393:booster.c     **** 		state_old = state;
+ 1397               	.LM165:
+ 1398 0562 1093 0000 		sts state_old.1973+1,r17
+ 1399 0566 0093 0000 		sts state_old.1973,r16
+ 1400               	.L87:
+ 394:booster.c     **** 		time_msgLastSended = time_now;
+ 1402               	.LM166:
+ 1403 056a 8F8D      		ldd r24,Y+31
+ 1404 056c 98A1      		ldd r25,Y+32
+ 1405 056e A9A1      		ldd r26,Y+33
+ 1406 0570 BAA1      		ldd r27,Y+34
+ 1407 0572 8093 0000 		sts time_msgLastSended.1994,r24
+ 1408 0576 9093 0000 		sts time_msgLastSended.1994+1,r25
+ 1409 057a A093 0000 		sts time_msgLastSended.1994+2,r26
+ 1410 057e B093 0000 		sts time_msgLastSended.1994+3,r27
+ 1411               	.L51:
+ 1412               	/* epilogue start */
+ 395:booster.c     **** 	}
+ 396:booster.c     **** 
+ 397:booster.c     **** }
+ 1414               	.LM167:
+ 1415 0582 A296      		adiw r28,34
+ 1416 0584 0FB6      		in __tmp_reg__,__SREG__
+ 1417 0586 F894      		cli
+ 1418 0588 DEBF      		out __SP_H__,r29
+ 1419 058a 0FBE      		out __SREG__,__tmp_reg__
+ 1420 058c CDBF      		out __SP_L__,r28
+ 1421 058e DF91      		pop r29
+ 1422 0590 CF91      		pop r28
+ 1423 0592 1F91      		pop r17
+ 1424 0594 0F91      		pop r16
+ 1425 0596 FF90      		pop r15
+ 1426 0598 DF90      		pop r13
+ 1427 059a CF90      		pop r12
+ 1428 059c BF90      		pop r11
+ 1429 059e AF90      		pop r10
+ 1430 05a0 9F90      		pop r9
+ 1431 05a2 8F90      		pop r8
+ 1432 05a4 7F90      		pop r7
+ 1433 05a6 6F90      		pop r6
+ 1434 05a8 5F90      		pop r5
+ 1435 05aa 4F90      		pop r4
+ 1436 05ac 0895      		ret
+ 1452               	.Lscope16:
+ 1453               		.local	time_msgLastSended.1994
+ 1454               		.comm	time_msgLastSended.1994,4,1
+ 1455               		.local	state_old.1973
+ 1456               		.comm	state_old.1973,2,1
+ 1457               	.global	last_heartbeat
+ 1458               		.section .bss
+ 1461               	last_heartbeat:
+ 1462 0000 0000 0000 		.zero	4
+ 1463               	.global	desired_voltage
+ 1464               		.data
+ 1467               	desired_voltage:
+ 1468 0000 4A01      		.word	330
+ 1469               		.comm	mode,1,1
+ 1470               	.global	adc_capacitor_raw
+ 1471               		.section .bss
+ 1474               	adc_capacitor_raw:
+ 1475 0004 0000      		.zero	2
+ 1476               	.global	adc_booster_raw
+ 1479               	adc_booster_raw:
+ 1480 0006 0000      		.zero	2
+ 1481               	.global	adc_logic_raw
+ 1484               	adc_logic_raw:
+ 1485 0008 0000      		.zero	2
+ 1492               		.text
+ 1494               	.Letext0:
+ 1495               		.ident	"GCC: (GNU) 4.9.2"
+ 1496               	.global __do_copy_data
+ 1497               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 booster.c
+     /tmp/cc1RU32f.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/cc1RU32f.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/cc1RU32f.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/cc1RU32f.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/cc1RU32f.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/cc1RU32f.s:134    .text:0000000000000000 booster_reset
+     /tmp/cc1RU32f.s:188    .text:000000000000001e booster_init
+                            *COM*:0000000000000001 mode
+     /tmp/cc1RU32f.s:244    .text:0000000000000040 booster_deactivate
+     /tmp/cc1RU32f.s:267    .text:0000000000000046 booster_getLogicVoltage
+     /tmp/cc1RU32f.s:1484   .bss:0000000000000008 adc_logic_raw
+     /tmp/cc1RU32f.s:299    .text:000000000000006a booster_getBoosterVoltage
+     /tmp/cc1RU32f.s:1479   .bss:0000000000000006 adc_booster_raw
+     /tmp/cc1RU32f.s:331    .text:000000000000008e booster_getState
+     /tmp/cc1RU32f.s:558    .text:0000000000000150 booster_activate
+     /tmp/cc1RU32f.s:620    .text:0000000000000184 booster_canKick
+     /tmp/cc1RU32f.s:664    .text:00000000000001ac booster_getCapacitorVoltage
+     /tmp/cc1RU32f.s:1474   .bss:0000000000000004 adc_capacitor_raw
+     /tmp/cc1RU32f.s:704    .text:00000000000001d0 booster_printVoltage
+     /tmp/cc1RU32f.s:808    .text:0000000000000270 booster_sendInfo
+     /tmp/cc1RU32f.s:868    .text:00000000000002b8 booster_setLogicRawVoltage
+     /tmp/cc1RU32f.s:887    .text:00000000000002c2 booster_setBoosterRawVoltage
+     /tmp/cc1RU32f.s:906    .text:00000000000002cc booster_setCapacitorRawVoltage
+     /tmp/cc1RU32f.s:929    .text:00000000000002d6 booster_setMaxVoltage
+     /tmp/cc1RU32f.s:1467   .data:0000000000000000 desired_voltage
+     /tmp/cc1RU32f.s:985    .text:00000000000002f4 booster_ctrl
+     /tmp/cc1RU32f.s:1461   .bss:0000000000000000 last_heartbeat
+     /tmp/cc1RU32f.s:1454   .bss:000000000000000e state_old.1973
+                             .bss:000000000000000a time_msgLastSended.1994
+
+UNDEFINED SYMBOLS
+__floatunsisf
+__mulsf3
+__fixunssfsi
+error
+debug
+sprintf
+prepareMsg
+__addsf3
+__gesf2
+__subsf3
+__lesf2
+timer_get_ms
+strcpy
+__do_copy_data
+__do_clear_bss

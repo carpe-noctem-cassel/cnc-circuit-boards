@@ -1,0 +1,418 @@
+   1               		.file	"adc.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 107               	.global	adc_init
+ 109               	adc_init:
+   1:adc.c         **** /*
+   2:adc.c         ****  * adc.c
+   3:adc.c         ****  *
+   4:adc.c         ****  *  Created on: Sep 9, 2016
+   5:adc.c         ****  *      Author: cn
+   6:adc.c         ****  */
+   7:adc.c         **** 
+   8:adc.c         **** #include "adc.h"
+   9:adc.c         **** 
+  10:adc.c         **** #include "defaults.h"
+  11:adc.c         **** #include "global.h"
+  12:adc.c         **** 
+  13:adc.c         **** #include <avr/io.h>
+  14:adc.c         **** #include <avr/interrupt.h>
+  15:adc.c         **** 
+  16:adc.c         **** volatile uint16_t adc_value;
+  17:adc.c         **** volatile int8_t adc_muxMode;
+  18:adc.c         **** volatile bool adc_ready;
+  19:adc.c         **** 
+  20:adc.c         **** 
+  21:adc.c         **** void adc_init()
+  22:adc.c         **** {
+ 111               	.LM0:
+ 112               	.LFBB1:
+ 113               	/* prologue: function */
+ 114               	/* frame size = 0 */
+ 115               	/* stack size = 0 */
+ 116               	.L__stack_usage = 0
+  23:adc.c         **** 	ADMUX = 0x00;
+ 118               	.LM1:
+ 119 0000 ECE7      		ldi r30,lo8(124)
+ 120 0002 F0E0      		ldi r31,0
+ 121 0004 1082      		st Z,__zero_reg__
+  24:adc.c         **** 	ADMUX |= (1 << REFS0);	// AVcc with external capacitor on AREF pin
+ 123               	.LM2:
+ 124 0006 8081      		ld r24,Z
+ 125 0008 8064      		ori r24,lo8(64)
+ 126 000a 8083      		st Z,r24
+  25:adc.c         **** 
+  26:adc.c         **** 	ADCSRA = 0x00;
+ 128               	.LM3:
+ 129 000c EAE7      		ldi r30,lo8(122)
+ 130 000e F0E0      		ldi r31,0
+ 131 0010 1082      		st Z,__zero_reg__
+  27:adc.c         **** 	ADCSRA |= (1 << ADEN) | (1 << ADIE);		// Enable ADC, Enable Interupt
+ 133               	.LM4:
+ 134 0012 8081      		ld r24,Z
+ 135 0014 8868      		ori r24,lo8(-120)
+ 136 0016 8083      		st Z,r24
+  28:adc.c         **** 	ADCSRA |= (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);	// Set Prescaler to 128 (16MHz / 128 = 125kH
+ 138               	.LM5:
+ 139 0018 8081      		ld r24,Z
+ 140 001a 8760      		ori r24,lo8(7)
+ 141 001c 8083      		st Z,r24
+  29:adc.c         **** 
+  30:adc.c         **** 	ADCSRB = 0x00;
+ 143               	.LM6:
+ 144 001e EBE7      		ldi r30,lo8(123)
+ 145 0020 F0E0      		ldi r31,0
+ 146 0022 1082      		st Z,__zero_reg__
+  31:adc.c         **** 	ADCSRB |= (1 << AREFEN);
+ 148               	.LM7:
+ 149 0024 8081      		ld r24,Z
+ 150 0026 8062      		ori r24,lo8(32)
+ 151 0028 8083      		st Z,r24
+ 152 002a 0895      		ret
+ 154               	.Lscope1:
+ 157               	.global	adc_start_conversion
+ 159               	adc_start_conversion:
+  32:adc.c         **** }
+  33:adc.c         **** 
+  34:adc.c         **** int8_t adc_start_conversion(int8_t muxMode)
+  35:adc.c         **** {
+ 161               	.LM8:
+ 162               	.LFBB2:
+ 163               	/* prologue: function */
+ 164               	/* frame size = 0 */
+ 165               	/* stack size = 0 */
+ 166               	.L__stack_usage = 0
+  36:adc.c         **** 	// Check if there is a conversion running
+  37:adc.c         **** 	if (ADCSRA & (1 << ADSC)) {
+ 168               	.LM9:
+ 169 002c 9091 7A00 		lds r25,122
+ 170 0030 96FD      		sbrc r25,6
+ 171 0032 00C0      		rjmp .L4
+  38:adc.c         **** 		// Old Conversion running
+  39:adc.c         **** 		return -1;
+  40:adc.c         **** 	}
+  41:adc.c         **** 
+  42:adc.c         **** 	ADMUX = ADMUX & 0xC0;		// Save VRef selection Bits
+ 173               	.LM10:
+ 174 0034 9091 7C00 		lds r25,124
+ 175 0038 907C      		andi r25,lo8(-64)
+ 176 003a 9093 7C00 		sts 124,r25
+  43:adc.c         **** 	ADMUX |= muxMode & 0x1F;	// Choose muxMode
+ 178               	.LM11:
+ 179 003e 9091 7C00 		lds r25,124
+ 180 0042 8F71      		andi r24,lo8(31)
+ 181 0044 892B      		or r24,r25
+ 182 0046 8093 7C00 		sts 124,r24
+  44:adc.c         **** 
+  45:adc.c         **** 	ADCSRA |= (1 << ADSC);		// Start Conversion
+ 184               	.LM12:
+ 185 004a 8091 7A00 		lds r24,122
+ 186 004e 8064      		ori r24,lo8(64)
+ 187 0050 8093 7A00 		sts 122,r24
+  46:adc.c         **** 	adc_ready = false;
+ 189               	.LM13:
+ 190 0054 1092 0000 		sts adc_ready,__zero_reg__
+  47:adc.c         **** 
+  48:adc.c         **** 	return 1;
+ 192               	.LM14:
+ 193 0058 81E0      		ldi r24,lo8(1)
+ 194 005a 0895      		ret
+ 195               	.L4:
+  39:adc.c         **** 	}
+ 197               	.LM15:
+ 198 005c 8FEF      		ldi r24,lo8(-1)
+  49:adc.c         **** }
+ 200               	.LM16:
+ 201 005e 0895      		ret
+ 203               	.Lscope2:
+ 205               	.global	adc_handler
+ 207               	adc_handler:
+  50:adc.c         **** 
+  51:adc.c         **** void adc_handler()
+  52:adc.c         **** {
+ 209               	.LM17:
+ 210               	.LFBB3:
+ 211               	/* prologue: function */
+ 212               	/* frame size = 0 */
+ 213               	/* stack size = 0 */
+ 214               	.L__stack_usage = 0
+  53:adc.c         **** 	static uint8_t mux = 0;
+  54:adc.c         **** 
+  55:adc.c         **** 	// Check if there is a conversion running
+  56:adc.c         **** 	if (ADCSRA & (1 << ADSC)) {
+ 216               	.LM18:
+ 217 0060 8091 7A00 		lds r24,122
+ 218 0064 86FD      		sbrc r24,6
+ 219 0066 00C0      		rjmp .L6
+  57:adc.c         **** 		return;
+  58:adc.c         **** 	}
+  59:adc.c         **** 
+  60:adc.c         **** 	switch(mux)
+ 221               	.LM19:
+ 222 0068 8091 0000 		lds r24,mux.1530
+ 223 006c 8230      		cpi r24,lo8(2)
+ 224 006e 01F0      		breq .L13
+ 225 0070 8330      		cpi r24,lo8(3)
+ 226 0072 01F0      		breq .L10
+ 227 0074 8130      		cpi r24,lo8(1)
+ 228 0076 01F4      		brne .L13
+  61:adc.c         **** 	{
+  62:adc.c         **** 		case ADC_24V_LOGIC:
+  63:adc.c         **** 			mux = ADC_24V_BOOSTER;
+ 230               	.LM20:
+ 231 0078 82E0      		ldi r24,lo8(2)
+ 232 007a 00C0      		rjmp .L14
+ 233               	.L10:
+  64:adc.c         **** 			break;
+  65:adc.c         **** 
+  66:adc.c         **** 		case ADC_24V_BOOSTER:
+  67:adc.c         **** 			mux = ADC_CAP;
+  68:adc.c         **** 			break;
+  69:adc.c         **** 
+  70:adc.c         **** 		case ADC_CAP:
+  71:adc.c         **** 			mux = ADC_24V_LOGIC;
+ 235               	.LM21:
+ 236 007c 81E0      		ldi r24,lo8(1)
+ 237 007e 00C0      		rjmp .L14
+ 238               	.L13:
+  72:adc.c         **** 			break;
+  73:adc.c         **** 
+  74:adc.c         **** 		default:
+  75:adc.c         **** 			mux = ADC_CAP;
+ 240               	.LM22:
+ 241 0080 83E0      		ldi r24,lo8(3)
+ 242               	.L14:
+ 243 0082 8093 0000 		sts mux.1530,r24
+  76:adc.c         **** 			break;
+  77:adc.c         **** 	}
+  78:adc.c         **** 
+  79:adc.c         **** 	adc_start_conversion(mux);
+ 245               	.LM23:
+ 246 0086 8091 0000 		lds r24,mux.1530
+ 247 008a 0C94 0000 		jmp adc_start_conversion
+ 248               	.L6:
+ 249 008e 0895      		ret
+ 254               	.Lscope3:
+ 257               	.global	adc_read
+ 259               	adc_read:
+  80:adc.c         **** }
+  81:adc.c         **** 
+  82:adc.c         **** int16_t adc_read(int8_t muxMode)
+  83:adc.c         **** {
+ 261               	.LM24:
+ 262               	.LFBB4:
+ 263               	/* prologue: function */
+ 264               	/* frame size = 0 */
+ 265               	/* stack size = 0 */
+ 266               	.L__stack_usage = 0
+  84:adc.c         **** 	// Check if there is a conversion running
+  85:adc.c         **** 	if (ADCSRA & (1 << ADSC))
+ 268               	.LM25:
+ 269 0090 8091 7A00 		lds r24,122
+ 270 0094 86FD      		sbrc r24,6
+ 271 0096 00C0      		rjmp .L18
+  86:adc.c         **** 	{
+  87:adc.c         **** 		// Old Conversion running
+  88:adc.c         **** 		return -1;
+  89:adc.c         **** 	}
+  90:adc.c         **** 
+  91:adc.c         **** 	uint8_t reg = ADMUX & 0xC0;		// Save VRef selection Bits
+ 273               	.LM26:
+ 274 0098 8091 7C00 		lds r24,124
+  92:adc.c         **** 	reg |= muxMode & 0x1F;			// Choose muxMode
+  93:adc.c         **** 
+  94:adc.c         **** 	ADCSRA |= (1 << ADSC);			// Start Conversion
+ 276               	.LM27:
+ 277 009c 8091 7A00 		lds r24,122
+ 278 00a0 8064      		ori r24,lo8(64)
+ 279 00a2 8093 7A00 		sts 122,r24
+ 280               	.L17:
+  95:adc.c         **** 
+  96:adc.c         **** 	while (ADCSRA & (1 << ADSC)) {
+ 282               	.LM28:
+ 283 00a6 8091 7A00 		lds r24,122
+ 284 00aa 86FD      		sbrc r24,6
+ 285 00ac 00C0      		rjmp .L17
+  97:adc.c         **** 
+  98:adc.c         **** 	}
+  99:adc.c         **** 
+ 100:adc.c         **** 	int16_t adc = (ADCH << 8) | ADCL;
+ 287               	.LM29:
+ 288 00ae 2091 7900 		lds r18,121
+ 289 00b2 8091 7800 		lds r24,120
+ 290 00b6 90E0      		ldi r25,0
+ 101:adc.c         **** 	return adc;
+ 292               	.LM30:
+ 293 00b8 922B      		or r25,r18
+ 294 00ba 0895      		ret
+ 295               	.L18:
+  88:adc.c         **** 	}
+ 297               	.LM31:
+ 298 00bc 8FEF      		ldi r24,lo8(-1)
+ 299 00be 9FEF      		ldi r25,lo8(-1)
+ 102:adc.c         **** }
+ 301               	.LM32:
+ 302 00c0 0895      		ret
+ 304               	.Lscope4:
+ 306               	.global	__vector_27
+ 308               	__vector_27:
+ 103:adc.c         **** 
+ 104:adc.c         **** ISR(ADC_vect)
+ 105:adc.c         **** {
+ 310               	.LM33:
+ 311               	.LFBB5:
+ 312 00c2 1F92      		push r1
+ 313 00c4 0F92      		push r0
+ 314 00c6 0FB6      		in r0,__SREG__
+ 315 00c8 0F92      		push r0
+ 316 00ca 1124      		clr __zero_reg__
+ 317 00cc 2F93      		push r18
+ 318 00ce 3F93      		push r19
+ 319 00d0 4F93      		push r20
+ 320 00d2 5F93      		push r21
+ 321 00d4 6F93      		push r22
+ 322 00d6 7F93      		push r23
+ 323 00d8 8F93      		push r24
+ 324 00da 9F93      		push r25
+ 325 00dc AF93      		push r26
+ 326 00de BF93      		push r27
+ 327 00e0 EF93      		push r30
+ 328 00e2 FF93      		push r31
+ 329               	/* prologue: Signal */
+ 330               	/* frame size = 0 */
+ 331               	/* stack size = 15 */
+ 332               	.L__stack_usage = 15
+ 106:adc.c         **** 	cli();
+ 334               	.LM34:
+ 335               	/* #APP */
+ 336               	 ;  106 "adc.c" 1
+ 337 00e4 F894      		cli
+ 338               	 ;  0 "" 2
+ 107:adc.c         **** 	adc_muxMode = ADMUX & 0x1F;
+ 340               	.LM35:
+ 341               	/* #NOAPP */
+ 342 00e6 8091 7C00 		lds r24,124
+ 343 00ea 8F71      		andi r24,lo8(31)
+ 344 00ec 8093 0000 		sts adc_muxMode,r24
+ 108:adc.c         **** 	adc_value = (ADCH << 8) | ADCL;
+ 346               	.LM36:
+ 347 00f0 2091 7900 		lds r18,121
+ 348 00f4 8091 7800 		lds r24,120
+ 349 00f8 90E0      		ldi r25,0
+ 350 00fa 922B      		or r25,r18
+ 351 00fc 9093 0000 		sts adc_value+1,r25
+ 352 0100 8093 0000 		sts adc_value,r24
+ 109:adc.c         **** 	adc_ready = true;
+ 354               	.LM37:
+ 355 0104 81E0      		ldi r24,lo8(1)
+ 356 0106 8093 0000 		sts adc_ready,r24
+ 110:adc.c         **** 	sei();
+ 358               	.LM38:
+ 359               	/* #APP */
+ 360               	 ;  110 "adc.c" 1
+ 361 010a 7894      		sei
+ 362               	 ;  0 "" 2
+ 111:adc.c         **** 
+ 112:adc.c         **** 	switch(adc_muxMode)
+ 364               	.LM39:
+ 365               	/* #NOAPP */
+ 366 010c 8091 0000 		lds r24,adc_muxMode
+ 367 0110 8230      		cpi r24,lo8(2)
+ 368 0112 01F0      		breq .L22
+ 369 0114 8330      		cpi r24,lo8(3)
+ 370 0116 01F0      		breq .L23
+ 371 0118 8130      		cpi r24,lo8(1)
+ 372 011a 01F4      		brne .L20
+ 373               	.LBB2:
+ 113:adc.c         **** 	{
+ 114:adc.c         **** 		case ADC_24V_LOGIC:
+ 115:adc.c         **** 			booster_setLogicRawVoltage(adc_value);
+ 375               	.LM40:
+ 376 011c 8091 0000 		lds r24,adc_value
+ 377 0120 9091 0000 		lds r25,adc_value+1
+ 378 0124 0E94 0000 		call booster_setLogicRawVoltage
+ 116:adc.c         **** 			break;
+ 380               	.LM41:
+ 381 0128 00C0      		rjmp .L20
+ 382               	.L22:
+ 117:adc.c         **** 
+ 118:adc.c         **** 		case ADC_24V_BOOSTER:
+ 119:adc.c         **** 			booster_setBoosterRawVoltage(adc_value);
+ 384               	.LM42:
+ 385 012a 8091 0000 		lds r24,adc_value
+ 386 012e 9091 0000 		lds r25,adc_value+1
+ 387 0132 0E94 0000 		call booster_setBoosterRawVoltage
+ 120:adc.c         **** 			break;
+ 389               	.LM43:
+ 390 0136 00C0      		rjmp .L20
+ 391               	.L23:
+ 121:adc.c         **** 
+ 122:adc.c         **** 		case ADC_CAP:
+ 123:adc.c         **** 			booster_setCapacitorRawVoltage(adc_value);
+ 393               	.LM44:
+ 394 0138 8091 0000 		lds r24,adc_value
+ 395 013c 9091 0000 		lds r25,adc_value+1
+ 396 0140 0E94 0000 		call booster_setCapacitorRawVoltage
+ 397               	.L20:
+ 398               	/* epilogue start */
+ 399               	.LBE2:
+ 124:adc.c         **** 			break;
+ 125:adc.c         **** 
+ 126:adc.c         **** 		default:
+ 127:adc.c         **** 			break;
+ 128:adc.c         **** 	}
+ 129:adc.c         **** }
+ 401               	.LM45:
+ 402 0144 FF91      		pop r31
+ 403 0146 EF91      		pop r30
+ 404 0148 BF91      		pop r27
+ 405 014a AF91      		pop r26
+ 406 014c 9F91      		pop r25
+ 407 014e 8F91      		pop r24
+ 408 0150 7F91      		pop r23
+ 409 0152 6F91      		pop r22
+ 410 0154 5F91      		pop r21
+ 411 0156 4F91      		pop r20
+ 412 0158 3F91      		pop r19
+ 413 015a 2F91      		pop r18
+ 414 015c 0F90      		pop r0
+ 415 015e 0FBE      		out __SREG__,r0
+ 416 0160 0F90      		pop r0
+ 417 0162 1F90      		pop r1
+ 418 0164 1895      		reti
+ 420               	.Lscope5:
+ 421               		.local	mux.1530
+ 422               		.comm	mux.1530,1,1
+ 423               		.comm	adc_ready,1,1
+ 424               		.comm	adc_muxMode,1,1
+ 425               		.comm	adc_value,2,1
+ 430               	.Letext0:
+ 431               		.ident	"GCC: (GNU) 4.9.2"
+ 432               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 adc.c
+     /tmp/ccmpNRhb.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccmpNRhb.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccmpNRhb.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccmpNRhb.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccmpNRhb.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccmpNRhb.s:109    .text:0000000000000000 adc_init
+     /tmp/ccmpNRhb.s:159    .text:000000000000002c adc_start_conversion
+                            *COM*:0000000000000001 adc_ready
+     /tmp/ccmpNRhb.s:207    .text:0000000000000060 adc_handler
+                             .bss:0000000000000000 mux.1530
+     /tmp/ccmpNRhb.s:259    .text:0000000000000090 adc_read
+     /tmp/ccmpNRhb.s:308    .text:00000000000000c2 __vector_27
+                            *COM*:0000000000000001 adc_muxMode
+                            *COM*:0000000000000002 adc_value
+
+UNDEFINED SYMBOLS
+booster_setLogicRawVoltage
+booster_setBoosterRawVoltage
+booster_setCapacitorRawVoltage
+__do_clear_bss

@@ -1,0 +1,246 @@
+   1               		.file	"timer.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 104               	.global	timer_init
+ 106               	timer_init:
+   1:timer.c       **** /*
+   2:timer.c       ****  * timer.c
+   3:timer.c       ****  *
+   4:timer.c       ****  *  Created on: Sep 19, 2016
+   5:timer.c       ****  *      Author: Carpe Noctem
+   6:timer.c       ****  */
+   7:timer.c       **** 
+   8:timer.c       **** #include "timer.h"
+   9:timer.c       **** 
+  10:timer.c       **** #include <avr/interrupt.h>
+  11:timer.c       **** #include <avr/io.h>
+  12:timer.c       **** 
+  13:timer.c       **** volatile uint32_t ticks = 0;
+  14:timer.c       **** volatile int16_t kicker_ticks = -1;
+  15:timer.c       **** 
+  16:timer.c       **** 
+  17:timer.c       **** void timer_init(void)
+  18:timer.c       **** {
+ 108               	.LM0:
+ 109               	.LFBB1:
+ 110               	/* prologue: function */
+ 111               	/* frame size = 0 */
+ 112               	/* stack size = 0 */
+ 113               	.L__stack_usage = 0
+  19:timer.c       **** 	// Timer 0
+  20:timer.c       **** 	TCCR0A = 0x00;
+ 115               	.LM1:
+ 116 0000 14BC      		out 0x24,__zero_reg__
+  21:timer.c       **** 
+  22:timer.c       **** 	TCCR0B = 0x00;
+ 118               	.LM2:
+ 119 0002 15BC      		out 0x25,__zero_reg__
+  23:timer.c       **** 	TCCR0B |= (1<<CS00);	// Prescaler: 1
+ 121               	.LM3:
+ 122 0004 85B5      		in r24,0x25
+ 123 0006 8160      		ori r24,lo8(1)
+ 124 0008 85BD      		out 0x25,r24
+  24:timer.c       **** 
+  25:timer.c       **** 	TIMSK0 = (1<<TOIE0);	// Interrupt bei Overflow
+ 126               	.LM4:
+ 127 000a 81E0      		ldi r24,lo8(1)
+ 128 000c 8093 6E00 		sts 110,r24
+ 129 0010 0895      		ret
+ 131               	.Lscope1:
+ 134               	.global	timer_get_ticks
+ 136               	timer_get_ticks:
+  26:timer.c       **** }
+  27:timer.c       **** 
+  28:timer.c       **** /**
+  29:timer.c       ****  * Get the ticks since power on.
+  30:timer.c       ****  *
+  31:timer.c       ****  * @returns The ticks since power on
+  32:timer.c       ****  */
+  33:timer.c       **** void timer_get_ticks(uint32_t* ret)
+  34:timer.c       **** {
+ 138               	.LM5:
+ 139               	.LFBB2:
+ 140               	/* prologue: function */
+ 141               	/* frame size = 0 */
+ 142               	/* stack size = 0 */
+ 143               	.L__stack_usage = 0
+  35:timer.c       **** 	cli();
+ 145               	.LM6:
+ 146               	/* #APP */
+ 147               	 ;  35 "timer.c" 1
+ 148 0012 F894      		cli
+ 149               	 ;  0 "" 2
+  36:timer.c       **** 	*ret = ticks;
+ 151               	.LM7:
+ 152               	/* #NOAPP */
+ 153 0014 4091 0000 		lds r20,ticks
+ 154 0018 5091 0000 		lds r21,ticks+1
+ 155 001c 6091 0000 		lds r22,ticks+2
+ 156 0020 7091 0000 		lds r23,ticks+3
+ 157 0024 FC01      		movw r30,r24
+ 158 0026 4083      		st Z,r20
+ 159 0028 5183      		std Z+1,r21
+ 160 002a 6283      		std Z+2,r22
+ 161 002c 7383      		std Z+3,r23
+  37:timer.c       **** 	sei();
+ 163               	.LM8:
+ 164               	/* #APP */
+ 165               	 ;  37 "timer.c" 1
+ 166 002e 7894      		sei
+ 167               	 ;  0 "" 2
+ 168               	/* #NOAPP */
+ 169 0030 0895      		ret
+ 171               	.Lscope2:
+ 174               	.global	timer_get_ms
+ 176               	timer_get_ms:
+  38:timer.c       **** }
+  39:timer.c       **** 
+  40:timer.c       **** /**
+  41:timer.c       ****  * Get the milliseconds since power on.
+  42:timer.c       ****  *
+  43:timer.c       ****  * @returns The time in ms.
+  44:timer.c       ****  */
+  45:timer.c       **** void timer_get_ms(uint32_t* ms)
+  46:timer.c       **** {
+ 178               	.LM9:
+ 179               	.LFBB3:
+ 180 0032 CF93      		push r28
+ 181 0034 DF93      		push r29
+ 182               	/* prologue: function */
+ 183               	/* frame size = 0 */
+ 184               	/* stack size = 2 */
+ 185               	.L__stack_usage = 2
+ 186 0036 EC01      		movw r28,r24
+  47:timer.c       **** 	timer_get_ticks(ms);
+ 188               	.LM10:
+ 189 0038 0E94 0000 		call timer_get_ticks
+  48:timer.c       **** 	*ms = *ms * TIMER_RES / 1000;
+ 191               	.LM11:
+ 192 003c 8881      		ld r24,Y
+ 193 003e 9981      		ldd r25,Y+1
+ 194 0040 AA81      		ldd r26,Y+2
+ 195 0042 BB81      		ldd r27,Y+3
+ 196 0044 BC01      		movw r22,r24
+ 197 0046 CD01      		movw r24,r26
+ 198 0048 24E0      		ldi r18,4
+ 199               		1:
+ 200 004a 660F      		lsl r22
+ 201 004c 771F      		rol r23
+ 202 004e 881F      		rol r24
+ 203 0050 991F      		rol r25
+ 204 0052 2A95      		dec r18
+ 205 0054 01F4      		brne 1b
+ 206 0056 28EE      		ldi r18,lo8(-24)
+ 207 0058 33E0      		ldi r19,lo8(3)
+ 208 005a 40E0      		ldi r20,0
+ 209 005c 50E0      		ldi r21,0
+ 210 005e 0E94 0000 		call __udivmodsi4
+ 211 0062 2883      		st Y,r18
+ 212 0064 3983      		std Y+1,r19
+ 213 0066 4A83      		std Y+2,r20
+ 214 0068 5B83      		std Y+3,r21
+ 215               	/* epilogue start */
+  49:timer.c       **** }
+ 217               	.LM12:
+ 218 006a DF91      		pop r29
+ 219 006c CF91      		pop r28
+ 220 006e 0895      		ret
+ 222               	.Lscope3:
+ 224               	.global	__vector_17
+ 226               	__vector_17:
+  50:timer.c       **** 
+  51:timer.c       **** ISR(TIMER0_OVF_vect) {
+ 228               	.LM13:
+ 229               	.LFBB4:
+ 230 0070 1F92      		push r1
+ 231 0072 0F92      		push r0
+ 232 0074 0FB6      		in r0,__SREG__
+ 233 0076 0F92      		push r0
+ 234 0078 1124      		clr __zero_reg__
+ 235 007a 8F93      		push r24
+ 236 007c 9F93      		push r25
+ 237 007e AF93      		push r26
+ 238 0080 BF93      		push r27
+ 239               	/* prologue: Signal */
+ 240               	/* frame size = 0 */
+ 241               	/* stack size = 7 */
+ 242               	.L__stack_usage = 7
+  52:timer.c       **** 	// löst alle 16us aus
+  53:timer.c       **** 	ticks++;
+ 244               	.LM14:
+ 245 0082 8091 0000 		lds r24,ticks
+ 246 0086 9091 0000 		lds r25,ticks+1
+ 247 008a A091 0000 		lds r26,ticks+2
+ 248 008e B091 0000 		lds r27,ticks+3
+ 249 0092 0196      		adiw r24,1
+ 250 0094 A11D      		adc r26,__zero_reg__
+ 251 0096 B11D      		adc r27,__zero_reg__
+ 252 0098 8093 0000 		sts ticks,r24
+ 253 009c 9093 0000 		sts ticks+1,r25
+ 254 00a0 A093 0000 		sts ticks+2,r26
+ 255 00a4 B093 0000 		sts ticks+3,r27
+  54:timer.c       **** 
+  55:timer.c       **** 	if(kicker_ticks > 0)
+ 257               	.LM15:
+ 258 00a8 8091 0000 		lds r24,kicker_ticks
+ 259 00ac 9091 0000 		lds r25,kicker_ticks+1
+ 260 00b0 1816      		cp __zero_reg__,r24
+ 261 00b2 1906      		cpc __zero_reg__,r25
+ 262 00b4 04F4      		brge .L4
+  56:timer.c       **** 		kicker_ticks--;
+ 264               	.LM16:
+ 265 00b6 8091 0000 		lds r24,kicker_ticks
+ 266 00ba 9091 0000 		lds r25,kicker_ticks+1
+ 267 00be 0197      		sbiw r24,1
+ 268 00c0 9093 0000 		sts kicker_ticks+1,r25
+ 269 00c4 8093 0000 		sts kicker_ticks,r24
+ 270               	.L4:
+ 271               	/* epilogue start */
+  57:timer.c       **** }
+ 273               	.LM17:
+ 274 00c8 BF91      		pop r27
+ 275 00ca AF91      		pop r26
+ 276 00cc 9F91      		pop r25
+ 277 00ce 8F91      		pop r24
+ 278 00d0 0F90      		pop r0
+ 279 00d2 0FBE      		out __SREG__,r0
+ 280 00d4 0F90      		pop r0
+ 281 00d6 1F90      		pop r1
+ 282 00d8 1895      		reti
+ 284               	.Lscope4:
+ 285               	.global	kicker_ticks
+ 286               		.data
+ 289               	kicker_ticks:
+ 290 0000 FFFF      		.word	-1
+ 291               	.global	ticks
+ 292               		.section .bss
+ 295               	ticks:
+ 296 0000 0000 0000 		.zero	4
+ 299               		.text
+ 301               	.Letext0:
+ 302               		.ident	"GCC: (GNU) 4.9.2"
+ 303               	.global __do_copy_data
+ 304               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 timer.c
+     /tmp/cchC3xxG.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/cchC3xxG.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/cchC3xxG.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/cchC3xxG.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/cchC3xxG.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/cchC3xxG.s:106    .text:0000000000000000 timer_init
+     /tmp/cchC3xxG.s:136    .text:0000000000000012 timer_get_ticks
+     /tmp/cchC3xxG.s:295    .bss:0000000000000000 ticks
+     /tmp/cchC3xxG.s:176    .text:0000000000000032 timer_get_ms
+     /tmp/cchC3xxG.s:226    .text:0000000000000070 __vector_17
+     /tmp/cchC3xxG.s:289    .data:0000000000000000 kicker_ticks
+
+UNDEFINED SYMBOLS
+__udivmodsi4
+__do_copy_data
+__do_clear_bss

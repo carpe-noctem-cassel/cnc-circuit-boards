@@ -1,0 +1,1170 @@
+   1               		.file	"can_drv.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 109               	.global	can_clear_all_mob
+ 111               	can_clear_all_mob:
+   1:can_drv.c     **** /*
+   2:can_drv.c     ****  * can_drv.c
+   3:can_drv.c     ****  	
+   4:can_drv.c     ****  	The contents of this file were originally from the CAN Software Library 
+   5:can_drv.c     ****  	provided by Atmel. Use of this file is subject to Atmel's End User 
+   6:can_drv.c     **** 	License Agreement.
+   7:can_drv.c     ****  	
+   8:can_drv.c     ****  */ 
+   9:can_drv.c     **** 
+  10:can_drv.c     **** //******************************************************************************
+  11:can_drv.c     **** //! @file $RCSfile: can_drv.c,v $
+  12:can_drv.c     **** //!
+  13:can_drv.c     **** //! Copyright (c) 2007 Atmel.
+  14:can_drv.c     **** //!
+  15:can_drv.c     **** //! Use of this program is subject to Atmel's End User License Agreement.
+  16:can_drv.c     **** //! Please read file license.txt for copyright notice.
+  17:can_drv.c     **** //!
+  18:can_drv.c     **** //! @brief This file contains the low level functions (drivers) of:
+  19:can_drv.c     **** //!             - CAN (Controller Array Network)
+  20:can_drv.c     **** //!             - for AT90CAN128/64/32
+  21:can_drv.c     **** //!
+  22:can_drv.c     **** //! This file can be parsed by Doxygen for automatic documentation generation.
+  23:can_drv.c     **** //! This file has been validated with AVRStudio-413528/WinAVR-20070122.
+  24:can_drv.c     **** //!
+  25:can_drv.c     **** //! @version $Revision: 3.20 $ $Name: jtellier $
+  26:can_drv.c     **** //!
+  27:can_drv.c     **** //! @todo
+  28:can_drv.c     **** //! @bug
+  29:can_drv.c     **** //******************************************************************************
+  30:can_drv.c     **** 
+  31:can_drv.c     **** //_____ I N C L U D E S ________________________________________________________
+  32:can_drv.c     **** #include "config.h"
+  33:can_drv.c     **** #include "can_drv.h"
+  34:can_drv.c     **** 
+  35:can_drv.c     **** //_____ D E F I N I T I O N S __________________________________________________
+  36:can_drv.c     **** 
+  37:can_drv.c     **** //_____ F U N C T I O N S ______________________________________________________
+  38:can_drv.c     **** 
+  39:can_drv.c     **** //------------------------------------------------------------------------------
+  40:can_drv.c     **** //  @fn can_clear_all_mob
+  41:can_drv.c     **** //!
+  42:can_drv.c     **** //! This function clears the Mailbox content.
+  43:can_drv.c     **** //! It reset CANSTMOB, CANCDMOB, CANIDTx & CANIDMx and clears data FIFO of
+  44:can_drv.c     **** //! MOb[0] upto MOb[LAST_MOB_NB].
+  45:can_drv.c     **** //!
+  46:can_drv.c     **** //! @warning: This version doesn't clears the data FIFO
+  47:can_drv.c     **** //!
+  48:can_drv.c     **** //! @param none
+  49:can_drv.c     **** //!
+  50:can_drv.c     **** //! @return none
+  51:can_drv.c     **** //------------------------------------------------------------------------------
+  52:can_drv.c     **** void can_clear_all_mob(void)
+  53:can_drv.c     **** {
+ 113               	.LM0:
+ 114               	.LFBB1:
+ 115               	/* prologue: function */
+ 116               	/* frame size = 0 */
+ 117               	/* stack size = 0 */
+ 118               	.L__stack_usage = 0
+  54:can_drv.c     **** uint8_t  mob_number;
+  55:can_drv.c     **** /*
+  56:can_drv.c     ****     uint8_t  data_index;
+  57:can_drv.c     **** */
+  58:can_drv.c     **** 
+  59:can_drv.c     ****     for (mob_number = 0; mob_number < NB_MOB; mob_number++)
+ 120               	.LM1:
+ 121 0000 80E0      		ldi r24,0
+ 122               	.L3:
+  60:can_drv.c     ****     {
+  61:can_drv.c     ****         CANPAGE = (mob_number << 4);    //! Page index
+ 124               	.LM2:
+ 125 0002 982F      		mov r25,r24
+ 126 0004 9295      		swap r25
+ 127 0006 907F      		andi r25,lo8(-16)
+ 128 0008 9093 ED00 		sts 237,r25
+ 129               	.LBB2:
+  62:can_drv.c     ****         Can_clear_mob();                //! All MOb Registers=0
+ 131               	.LM3:
+ 132 000c EEEE      		ldi r30,lo8(-18)
+ 133 000e F0E0      		ldi r31,0
+ 134               	.L2:
+ 136               	.LM4:
+ 137 0010 1192      		st Z+,__zero_reg__
+ 138 0012 E83F      		cpi r30,-8
+ 139 0014 F105      		cpc r31,__zero_reg__
+ 140 0016 01F4      		brne .L2
+ 141               	.LBE2:
+  59:can_drv.c     ****     {
+ 143               	.LM5:
+ 144 0018 8F5F      		subi r24,lo8(-(1))
+ 145 001a 8630      		cpi r24,lo8(6)
+ 146 001c 01F4      		brne .L3
+ 147               	/* epilogue start */
+  63:can_drv.c     **** /*
+  64:can_drv.c     ****         for (data_index = 0; data_index < NB_DATA_MAX; data_index++)
+  65:can_drv.c     ****         {
+  66:can_drv.c     ****             CANMSG = 0;                 //! MOb data FIFO
+  67:can_drv.c     ****         }
+  68:can_drv.c     **** */
+  69:can_drv.c     ****     }
+  70:can_drv.c     **** }
+ 149               	.LM6:
+ 150 001e 0895      		ret
+ 158               	.Lscope1:
+ 160               	.global	can_get_mob_free
+ 162               	can_get_mob_free:
+  71:can_drv.c     **** 
+  72:can_drv.c     **** //------------------------------------------------------------------------------
+  73:can_drv.c     **** //  @fn can_get_mob_free
+  74:can_drv.c     **** //!
+  75:can_drv.c     **** //! This function returns the number of the first MOb available or 0xFF if
+  76:can_drv.c     **** //! no MOb is available.
+  77:can_drv.c     **** //!
+  78:can_drv.c     **** //! @warning none.
+  79:can_drv.c     **** //!
+  80:can_drv.c     **** //! @param  none.
+  81:can_drv.c     **** //!
+  82:can_drv.c     **** //! @return Handle of MOb.
+  83:can_drv.c     **** //!          - MOb[0] upto MOb[LAST_MOB_NB]
+  84:can_drv.c     **** //!          - 0xFF if no MOb
+  85:can_drv.c     **** //------------------------------------------------------------------------------
+  86:can_drv.c     **** uint8_t can_get_mob_free(void)
+  87:can_drv.c     **** {
+ 164               	.LM7:
+ 165               	.LFBB2:
+ 166               	/* prologue: function */
+ 167               	/* frame size = 0 */
+ 168               	/* stack size = 0 */
+ 169               	.L__stack_usage = 0
+  88:can_drv.c     ****     uint8_t mob_number, page_saved;
+  89:can_drv.c     **** 
+  90:can_drv.c     ****     page_saved = CANPAGE;
+ 171               	.LM8:
+ 172 0020 2091 ED00 		lds r18,237
+  91:can_drv.c     ****     for (mob_number = 0; mob_number < NB_MOB; mob_number++)
+ 174               	.LM9:
+ 175 0024 80E0      		ldi r24,0
+ 176               	.L10:
+  92:can_drv.c     ****     {
+  93:can_drv.c     ****         Can_set_mob(mob_number);
+ 178               	.LM10:
+ 179 0026 982F      		mov r25,r24
+ 180 0028 9295      		swap r25
+ 181 002a 907F      		andi r25,lo8(-16)
+ 182 002c 9093 ED00 		sts 237,r25
+  94:can_drv.c     ****         if ((CANCDMOB & 0xC0) == 0x00) //! Disable configuration
+ 184               	.LM11:
+ 185 0030 9091 EF00 		lds r25,239
+ 186 0034 907C      		andi r25,lo8(-64)
+ 187 0036 01F4      		brne .L8
+  95:can_drv.c     ****         {
+  96:can_drv.c     ****             CANPAGE = page_saved;
+ 189               	.LM12:
+ 190 0038 2093 ED00 		sts 237,r18
+  97:can_drv.c     ****             return (mob_number);
+ 192               	.LM13:
+ 193 003c 0895      		ret
+ 194               	.L8:
+  91:can_drv.c     ****     {
+ 196               	.LM14:
+ 197 003e 8F5F      		subi r24,lo8(-(1))
+ 198 0040 8630      		cpi r24,lo8(6)
+ 199 0042 01F4      		brne .L10
+  98:can_drv.c     ****         }
+  99:can_drv.c     ****     }
+ 100:can_drv.c     ****     CANPAGE = page_saved;
+ 201               	.LM15:
+ 202 0044 2093 ED00 		sts 237,r18
+ 101:can_drv.c     ****     return (NO_MOB);
+ 204               	.LM16:
+ 205 0048 8FEF      		ldi r24,lo8(-1)
+ 102:can_drv.c     **** }
+ 207               	.LM17:
+ 208 004a 0895      		ret
+ 214               	.Lscope2:
+ 216               	.global	can_get_mob_status
+ 218               	can_get_mob_status:
+ 103:can_drv.c     **** 
+ 104:can_drv.c     **** //------------------------------------------------------------------------------
+ 105:can_drv.c     **** //  @fn can_get_mob_status
+ 106:can_drv.c     **** //!
+ 107:can_drv.c     **** //! This function returns information "MOB completed its job"
+ 108:can_drv.c     **** //! if one of the RXOK or TXOK Flag is set or "MOB not completed its job
+ 109:can_drv.c     **** //! if no RXOK and TXOK flags are set.
+ 110:can_drv.c     **** //! Previously, this function checks if the MOb is configured or not and in
+ 111:can_drv.c     **** //!  case of the MOB not configured, the function returns "MOB_DISABLE".
+ 112:can_drv.c     **** //!
+ 113:can_drv.c     **** //! @warning none.
+ 114:can_drv.c     **** //!
+ 115:can_drv.c     **** //! @param none.
+ 116:can_drv.c     **** //!
+ 117:can_drv.c     **** //! @return MOb Status.
+ 118:can_drv.c     **** //!          -  MOB_NOT_COMPLETED
+ 119:can_drv.c     **** //!          -  MOB_TX_COMPLETED
+ 120:can_drv.c     **** //!          -  MOB_RX_COMPLETED
+ 121:can_drv.c     **** //!          -  MOB_RX_DLC_WARNING
+ 122:can_drv.c     **** //!          -  MOB_DISABLE
+ 123:can_drv.c     **** //!          or should be a combination of the following errors
+ 124:can_drv.c     **** //!          -  MOB_ACK_ERROR
+ 125:can_drv.c     **** //!          -  MOB_FORM_ERROR
+ 126:can_drv.c     **** //!          -  MOB_CRC_ERROR
+ 127:can_drv.c     **** //!          -  MOB_STUFF_ERROR
+ 128:can_drv.c     **** //!          -  MOB_BIT_ERROR
+ 129:can_drv.c     **** //------------------------------------------------------------------------------
+ 130:can_drv.c     **** uint8_t can_get_mob_status(void)
+ 131:can_drv.c     **** {
+ 220               	.LM18:
+ 221               	.LFBB3:
+ 222               	/* prologue: function */
+ 223               	/* frame size = 0 */
+ 224               	/* stack size = 0 */
+ 225               	.L__stack_usage = 0
+ 132:can_drv.c     ****     uint8_t mob_status, canstmob_copy;
+ 133:can_drv.c     **** 
+ 134:can_drv.c     ****     // Test if MOb ENABLE or DISABLE
+ 135:can_drv.c     ****     if ((CANCDMOB & 0xC0) == 0x00) {return(MOB_DISABLE);}
+ 227               	.LM19:
+ 228 004c 8091 EF00 		lds r24,239
+ 229 0050 807C      		andi r24,lo8(-64)
+ 230 0052 01F0      		breq .L14
+ 136:can_drv.c     **** 
+ 137:can_drv.c     ****     canstmob_copy = CANSTMOB; // Copy for test integrity
+ 232               	.LM20:
+ 233 0054 8091 EE00 		lds r24,238
+ 138:can_drv.c     **** 
+ 139:can_drv.c     ****     // If MOb is ENABLE, test if MOb is COMPLETED
+ 140:can_drv.c     ****     // - MOb Status = 0x20 then MOB_RX_COMPLETED
+ 141:can_drv.c     ****     // - MOb Status = 0x40 then MOB_TX_COMPLETED
+ 142:can_drv.c     ****     // - MOb Status = 0xA0 then MOB_RX_COMPLETED_DLCW
+ 143:can_drv.c     ****     mob_status = canstmob_copy & ((1<<DLCW)|(1<<TXOK)|(1<<RXOK));
+ 235               	.LM21:
+ 236 0058 982F      		mov r25,r24
+ 237 005a 907E      		andi r25,lo8(-32)
+ 144:can_drv.c     ****     if ( (mob_status==MOB_RX_COMPLETED) ||   \
+ 239               	.LM22:
+ 240 005c 9032      		cpi r25,lo8(32)
+ 241 005e 01F0      		breq .L15
+ 243               	.LM23:
+ 244 0060 9034      		cpi r25,lo8(64)
+ 245 0062 01F0      		breq .L16
+ 145:can_drv.c     ****          (mob_status==MOB_TX_COMPLETED) ||   \
+ 247               	.LM24:
+ 248 0064 903A      		cpi r25,lo8(-96)
+ 249 0066 01F0      		breq .L17
+ 146:can_drv.c     ****          (mob_status==MOB_RX_COMPLETED_DLCW) ) { return(mob_status); }
+ 147:can_drv.c     **** 
+ 148:can_drv.c     ****     // If MOb is ENABLE & NOT_COMPLETED, test if MOb is in ERROR
+ 149:can_drv.c     ****     // - MOb Status bit_0 = MOB_ACK_ERROR
+ 150:can_drv.c     ****     // - MOb Status bit_1 = MOB_FORM_ERROR
+ 151:can_drv.c     ****     // - MOb Status bit_2 = MOB_CRC_ERROR
+ 152:can_drv.c     ****     // - MOb Status bit_3 = MOB_STUFF_ERROR
+ 153:can_drv.c     ****     // - MOb Status bit_4 = MOB_BIT_ERROR
+ 154:can_drv.c     ****     mob_status = canstmob_copy & ERR_MOB_MSK;
+ 251               	.LM25:
+ 252 0068 8F71      		andi r24,lo8(31)
+ 253 006a 0895      		ret
+ 254               	.L14:
+ 135:can_drv.c     **** 
+ 256               	.LM26:
+ 257 006c 8FEF      		ldi r24,lo8(-1)
+ 258 006e 0895      		ret
+ 259               	.L15:
+ 260 0070 80E2      		ldi r24,lo8(32)
+ 261 0072 0895      		ret
+ 262               	.L16:
+ 263 0074 80E4      		ldi r24,lo8(64)
+ 264 0076 0895      		ret
+ 265               	.L17:
+ 266 0078 80EA      		ldi r24,lo8(-96)
+ 155:can_drv.c     ****     if (mob_status != 0) { return(mob_status); }
+ 156:can_drv.c     **** 
+ 157:can_drv.c     ****     // If CANSTMOB = 0 then MOB_NOT_COMPLETED
+ 158:can_drv.c     ****     return(MOB_NOT_COMPLETED);
+ 159:can_drv.c     **** }
+ 268               	.LM27:
+ 269 007a 0895      		ret
+ 274               	.Lscope3:
+ 277               	.global	can_get_data
+ 279               	can_get_data:
+ 160:can_drv.c     **** 
+ 161:can_drv.c     **** //------------------------------------------------------------------------------
+ 162:can_drv.c     **** //  @fn can_get_data
+ 163:can_drv.c     **** //!
+ 164:can_drv.c     **** //! This function copy the data from the selected MOb to the address
+ 165:can_drv.c     **** //! passed as parameter.
+ 166:can_drv.c     **** //!
+ 167:can_drv.c     **** //! @warning none.
+ 168:can_drv.c     **** //!
+ 169:can_drv.c     **** //! @param CAN message data address.
+ 170:can_drv.c     **** //!
+ 171:can_drv.c     **** //! @return none.
+ 172:can_drv.c     **** //------------------------------------------------------------------------------
+ 173:can_drv.c     **** void can_get_data(uint8_t* p_can_message_data)
+ 174:can_drv.c     **** {
+ 281               	.LM28:
+ 282               	.LFBB4:
+ 283               	/* prologue: function */
+ 284               	/* frame size = 0 */
+ 285               	/* stack size = 0 */
+ 286               	.L__stack_usage = 0
+ 287 007c BC01      		movw r22,r24
+ 175:can_drv.c     ****     uint8_t data_index;
+ 176:can_drv.c     **** 
+ 177:can_drv.c     ****     for (data_index = 0; data_index < (Can_get_dlc()); data_index++)
+ 289               	.LM29:
+ 290 007e 90E0      		ldi r25,0
+ 291               	.L19:
+ 293               	.LM30:
+ 294 0080 2091 EF00 		lds r18,239
+ 295 0084 492F      		mov r20,r25
+ 296 0086 50E0      		ldi r21,0
+ 297 0088 2F70      		andi r18,lo8(15)
+ 298 008a 30E0      		ldi r19,0
+ 299 008c 4217      		cp r20,r18
+ 300 008e 5307      		cpc r21,r19
+ 301 0090 04F4      		brge .L21
+ 178:can_drv.c     ****     {
+ 179:can_drv.c     ****         *(p_can_message_data + data_index) = CANMSG;
+ 303               	.LM31:
+ 304 0092 8091 FA00 		lds r24,250
+ 305 0096 FB01      		movw r30,r22
+ 306 0098 E40F      		add r30,r20
+ 307 009a F51F      		adc r31,r21
+ 308 009c 8083      		st Z,r24
+ 177:can_drv.c     ****     {
+ 310               	.LM32:
+ 311 009e 9F5F      		subi r25,lo8(-(1))
+ 312 00a0 00C0      		rjmp .L19
+ 313               	.L21:
+ 314               	/* epilogue start */
+ 180:can_drv.c     ****     }
+ 181:can_drv.c     **** }
+ 316               	.LM33:
+ 317 00a2 0895      		ret
+ 322               	.Lscope4:
+ 325               	.global	can_auto_baudrate
+ 327               	can_auto_baudrate:
+ 182:can_drv.c     **** 
+ 183:can_drv.c     **** //------------------------------------------------------------------------------
+ 184:can_drv.c     **** //  @fn can_auto_baudrate
+ 185:can_drv.c     **** //!
+ 186:can_drv.c     **** //! This function programs itself the CANBTx registers if there is some
+ 187:can_drv.c     **** //! communication (activity) on the CAN bus.
+ 188:can_drv.c     **** //!
+ 189:can_drv.c     **** //! @warning complex function not yet implemented
+ 190:can_drv.c     **** //!
+ 191:can_drv.c     **** //! @param  Evaluation needed
+ 192:can_drv.c     **** //!         ==0: start the evaluation from faster baudrate
+ 193:can_drv.c     **** //!         ==1: (re)start an evaluation with CANBTx registers contents
+ 194:can_drv.c     **** //!
+ 195:can_drv.c     **** //! @return Baudrate Status
+ 196:can_drv.c     **** //!         ==0: research of bit timing configuration failed
+ 197:can_drv.c     **** //!         ==1: baudrate performed
+ 198:can_drv.c     **** //------------------------------------------------------------------------------
+ 199:can_drv.c     **** uint8_t can_auto_baudrate (uint8_t mode)
+ 200:can_drv.c     **** {
+ 329               	.LM34:
+ 330               	.LFBB5:
+ 331 00a4 9F92      		push r9
+ 332 00a6 AF92      		push r10
+ 333 00a8 BF92      		push r11
+ 334 00aa CF92      		push r12
+ 335 00ac DF92      		push r13
+ 336 00ae EF92      		push r14
+ 337 00b0 FF92      		push r15
+ 338 00b2 0F93      		push r16
+ 339 00b4 1F93      		push r17
+ 340 00b6 CF93      		push r28
+ 341 00b8 DF93      		push r29
+ 342               	/* prologue: function */
+ 343               	/* frame size = 0 */
+ 344               	/* stack size = 11 */
+ 345               	.L__stack_usage = 11
+ 201:can_drv.c     ****     uint8_t  u8_temp0;                               //! Temporary variable
+ 202:can_drv.c     ****     uint8_t  brp, prs, ntq, phs1, phs2;              //! Bit timing segment variables
+ 203:can_drv.c     ****     uint8_t  phs1_inc;                               //! Computing needed
+ 204:can_drv.c     ****     uint8_t  bt_not_found, wait_for_rx, evaluate;    //! Keys for "while()" loops
+ 205:can_drv.c     ****     uint8_t  try_conf;                               //! Key for configurate CAN
+ 206:can_drv.c     ****     uint8_t  ovrtim_flag=0;                          //! Timer overflow count
+ 207:can_drv.c     ****     uint16_t conf_index;                             //! Count of bit timing configuration tried
+ 208:can_drv.c     ****     uint8_t  bt_performed;                           //! Return flag
+ 209:can_drv.c     **** 
+ 210:can_drv.c     ****     //! --- Default setting
+ 211:can_drv.c     ****     phs1_inc = evaluate = 0;
+ 212:can_drv.c     ****     bt_performed = 0;
+ 213:can_drv.c     ****     conf_index = 0;
+ 214:can_drv.c     ****     bt_not_found = 1;
+ 215:can_drv.c     **** 
+ 216:can_drv.c     ****     //! --- Init segment variables with MIN values if mode=0
+ 217:can_drv.c     ****     //!     or init segment variables with CANBTx if mode=1
+ 218:can_drv.c     ****     if (mode==0)
+ 347               	.LM35:
+ 348 00ba 8823      		tst r24
+ 349 00bc 01F4      		brne .+2
+ 350 00be 00C0      		rjmp .L51
+ 219:can_drv.c     ****     {
+ 220:can_drv.c     ****         brp  = BRP_MIN;
+ 221:can_drv.c     ****         ntq  = NTQ_MIN;
+ 222:can_drv.c     ****         phs1 = PHS1_MIN;
+ 223:can_drv.c     ****         phs2 = PHS2_MIN;
+ 224:can_drv.c     ****         prs  = ntq - ( phs1 + phs2 + 1 );
+ 225:can_drv.c     ****         try_conf = 1;       //! Try this configuration
+ 226:can_drv.c     ****         wait_for_rx = 1;    //! Enable "while (wait_for_rx ..." loop
+ 227:can_drv.c     ****     }
+ 228:can_drv.c     ****     else //! mode = 1
+ 229:can_drv.c     ****     {
+ 230:can_drv.c     ****         brp  = Max ((((CANBT1 &  BRP_MSK) >> 1) +1) , BRP_MIN );
+ 352               	.LM36:
+ 353 00c0 8091 E200 		lds r24,226
+ 354 00c4 8E77      		andi r24,lo8(126)
+ 355 00c6 01F0      		breq .L52
+ 357               	.LM37:
+ 358 00c8 5091 E200 		lds r21,226
+ 359 00cc 5E77      		andi r21,lo8(126)
+ 360 00ce 5695      		lsr r21
+ 361 00d0 5F5F      		subi r21,lo8(-(1))
+ 362 00d2 00C0      		rjmp .L24
+ 363               	.L52:
+ 365               	.LM38:
+ 366 00d4 51E0      		ldi r21,lo8(1)
+ 367               	.L24:
+ 231:can_drv.c     ****         prs  = Max ((((CANBT2 &  PRS_MSK) >> 1) +1) , PRS_MIN );
+ 369               	.LM39:
+ 370 00d6 8091 E300 		lds r24,227
+ 371 00da 8E70      		andi r24,lo8(14)
+ 372 00dc 01F0      		breq .L53
+ 374               	.LM40:
+ 375 00de 4091 E300 		lds r20,227
+ 376 00e2 4E70      		andi r20,lo8(14)
+ 377 00e4 4695      		lsr r20
+ 378 00e6 4F5F      		subi r20,lo8(-(1))
+ 379 00e8 00C0      		rjmp .L25
+ 380               	.L53:
+ 382               	.LM41:
+ 383 00ea 41E0      		ldi r20,lo8(1)
+ 384               	.L25:
+ 232:can_drv.c     ****         phs1 = Max ((((CANBT3 & PHS1_MSK) >> 1) +1) , PHS1_MIN);
+ 386               	.LM42:
+ 387 00ec 8091 E400 		lds r24,228
+ 388 00f0 8E70      		andi r24,lo8(14)
+ 389 00f2 8330      		cpi r24,lo8(3)
+ 390 00f4 00F0      		brlo .L54
+ 392               	.LM43:
+ 393 00f6 9091 E400 		lds r25,228
+ 394 00fa 9E70      		andi r25,lo8(14)
+ 395 00fc 9695      		lsr r25
+ 396 00fe 9F5F      		subi r25,lo8(-(1))
+ 397 0100 00C0      		rjmp .L26
+ 398               	.L54:
+ 400               	.LM44:
+ 401 0102 92E0      		ldi r25,lo8(2)
+ 402               	.L26:
+ 233:can_drv.c     ****         phs2 = Max ((((CANBT3 & PHS2_MSK) >> 4) +1) , PHS2_MIN);
+ 404               	.LM45:
+ 405 0104 8091 E400 		lds r24,228
+ 406 0108 8077      		andi r24,lo8(112)
+ 407 010a 8131      		cpi r24,lo8(17)
+ 408 010c 00F0      		brlo .L55
+ 410               	.LM46:
+ 411 010e 2091 E400 		lds r18,228
+ 412 0112 2077      		andi r18,lo8(112)
+ 413 0114 2295      		swap r18
+ 414 0116 2F70      		andi r18,lo8(15)
+ 415 0118 2F5F      		subi r18,lo8(-(1))
+ 416 011a 00C0      		rjmp .L27
+ 417               	.L55:
+ 419               	.LM47:
+ 420 011c 22E0      		ldi r18,lo8(2)
+ 421               	.L27:
+ 234:can_drv.c     ****         ntq  = Max ((prs + phs1 + phs2 + 1) , NTQ_MIN);
+ 423               	.LM48:
+ 424 011e 692F      		mov r22,r25
+ 425 0120 70E0      		ldi r23,0
+ 426 0122 640F      		add r22,r20
+ 427 0124 711D      		adc r23,__zero_reg__
+ 428 0126 620F      		add r22,r18
+ 429 0128 711D      		adc r23,__zero_reg__
+ 430 012a 6830      		cpi r22,8
+ 431 012c 7105      		cpc r23,__zero_reg__
+ 432 012e 04F0      		brlt .L56
+ 433 0130 61E0      		ldi r22,lo8(1)
+ 434 0132 640F      		add r22,r20
+ 435 0134 690F      		add r22,r25
+ 437               	.LM49:
+ 438 0136 620F      		add r22,r18
+ 235:can_drv.c     ****         phs1_inc = evaluate = 1;   //! To enter in "while (evaluate ..." loop
+ 236:can_drv.c     ****         try_conf = 0;       //! Look for the next configuration
+ 237:can_drv.c     ****         wait_for_rx = 0;    //! Skip "while (wait_for_rx ..." loop
+ 440               	.LM50:
+ 441 0138 30E0      		ldi r19,0
+ 235:can_drv.c     ****         phs1_inc = evaluate = 1;   //! To enter in "while (evaluate ..." loop
+ 443               	.LM51:
+ 444 013a 71E0      		ldi r23,lo8(1)
+ 445 013c 00C0      		rjmp .L23
+ 446               	.L51:
+ 226:can_drv.c     ****     }
+ 448               	.LM52:
+ 449 013e 31E0      		ldi r19,lo8(1)
+ 211:can_drv.c     ****     bt_performed = 0;
+ 451               	.LM53:
+ 452 0140 70E0      		ldi r23,0
+ 223:can_drv.c     ****         prs  = ntq - ( phs1 + phs2 + 1 );
+ 454               	.LM54:
+ 455 0142 22E0      		ldi r18,lo8(2)
+ 222:can_drv.c     ****         phs2 = PHS2_MIN;
+ 457               	.LM55:
+ 458 0144 92E0      		ldi r25,lo8(2)
+ 221:can_drv.c     ****         phs1 = PHS1_MIN;
+ 460               	.LM56:
+ 461 0146 68E0      		ldi r22,lo8(8)
+ 224:can_drv.c     ****         try_conf = 1;       //! Try this configuration
+ 463               	.LM57:
+ 464 0148 43E0      		ldi r20,lo8(3)
+ 220:can_drv.c     ****         ntq  = NTQ_MIN;
+ 466               	.LM58:
+ 467 014a 51E0      		ldi r21,lo8(1)
+ 468 014c 00C0      		rjmp .L23
+ 469               	.L56:
+ 471               	.LM59:
+ 472 014e 30E0      		ldi r19,0
+ 235:can_drv.c     ****         try_conf = 0;       //! Look for the next configuration
+ 474               	.LM60:
+ 475 0150 71E0      		ldi r23,lo8(1)
+ 234:can_drv.c     ****         phs1_inc = evaluate = 1;   //! To enter in "while (evaluate ..." loop
+ 477               	.LM61:
+ 478 0152 68E0      		ldi r22,lo8(8)
+ 479               	.L23:
+ 238:can_drv.c     ****     }
+ 239:can_drv.c     **** 
+ 240:can_drv.c     ****     //! --- Clear all MOb's (CANMSG not cleared)
+ 241:can_drv.c     ****     for (u8_temp0 = 0; u8_temp0 < NB_MOB; u8_temp0++)
+ 481               	.LM62:
+ 482 0154 80E0      		ldi r24,0
+ 483               	.L29:
+ 242:can_drv.c     ****     {
+ 243:can_drv.c     ****         Can_set_mob(u8_temp0);  //! Page index
+ 485               	.LM63:
+ 486 0156 E82F      		mov r30,r24
+ 487 0158 E295      		swap r30
+ 488 015a E07F      		andi r30,lo8(-16)
+ 489 015c E093 ED00 		sts 237,r30
+ 490               	.LBB3:
+ 244:can_drv.c     ****         Can_clear_mob();        //! All MOb Registers = 0x00
+ 492               	.LM64:
+ 493 0160 EEEE      		ldi r30,lo8(-18)
+ 494 0162 F0E0      		ldi r31,0
+ 495               	.L28:
+ 497               	.LM65:
+ 498 0164 1192      		st Z+,__zero_reg__
+ 499 0166 E83F      		cpi r30,-8
+ 500 0168 F105      		cpc r31,__zero_reg__
+ 501 016a 01F4      		brne .L28
+ 502               	.LBE3:
+ 241:can_drv.c     ****     {
+ 504               	.LM66:
+ 505 016c 8F5F      		subi r24,lo8(-(1))
+ 506 016e 8630      		cpi r24,lo8(6)
+ 507 0170 01F4      		brne .L29
+ 508 0172 132F      		mov r17,r19
+ 509 0174 072F      		mov r16,r23
+ 241:can_drv.c     ****     {
+ 511               	.LM67:
+ 512 0176 80E0      		ldi r24,0
+ 513 0178 A0E0      		ldi r26,0
+ 514 017a B0E0      		ldi r27,0
+ 515 017c B12C      		mov r11,__zero_reg__
+ 245:can_drv.c     ****     }
+ 246:can_drv.c     **** 
+ 247:can_drv.c     ****     while (bt_not_found == 1)
+ 248:can_drv.c     ****     {
+ 249:can_drv.c     ****         if (try_conf == 1)
+ 250:can_drv.c     ****         {
+ 251:can_drv.c     ****             Can_reset();
+ 252:can_drv.c     ****             conf_index++;
+ 253:can_drv.c     ****             ovrtim_flag=0;
+ 254:can_drv.c     **** 
+ 255:can_drv.c     ****             //! --- CANBTx registers update (sjw = phs2/2, 3 sample points)
+ 256:can_drv.c     ****             CANBT1 = ((brp-1) << BRP);
+ 257:can_drv.c     ****             CANBT2 = (((phs2 >> 1)-1) << SJW) |((prs-1) << PRS);
+ 258:can_drv.c     ****             CANBT3 = (((phs2-1) << PHS2) | ((phs1-1) << PHS1) | (1<<SMP));
+ 259:can_drv.c     **** 
+ 260:can_drv.c     ****             //! --- Set CAN-Timer - Used for time-out
+ 261:can_drv.c     ****             //!     There are 641 (0x281) possible evaluations. The first one provides the faster
+ 262:can_drv.c     ****             //!         the faster bit timing, the last one gives the slower. It is necessary to
+ 263:can_drv.c     ****             //!         modulate the time-out versus bit timing (0x281>>3=0x50, matching an U8).
+ 264:can_drv.c     ****             CANTCON = (uint8_t)(conf_index >> 3);
+ 265:can_drv.c     **** 
+ 266:can_drv.c     ****             //! --- MOb configuration
+ 267:can_drv.c     ****             Can_set_mob(MOB_0);                 //! Use MOb-0
+ 268:can_drv.c     ****             CANSTMOB = 0;                       //! Reset MOb status (undone by "Can_reset()")
+ 269:can_drv.c     ****             CANCDMOB = (MOB_Rx_ENA  << CONMOB); //! MOb 0 in receive mode
+ 517               	.LM68:
+ 518 017e D0E8      		ldi r29,lo8(-128)
+ 519 0180 AD2E      		mov r10,r29
+ 270:can_drv.c     **** 
+ 271:can_drv.c     ****             //! CAN controller configuration
+ 272:can_drv.c     ****             CANGCON = (1<<LISTEN) | (1<<ENASTB);//! Enable CAN controller in "listen" mode
+ 521               	.LM69:
+ 522 0182 EAE0      		ldi r30,lo8(10)
+ 523 0184 9E2E      		mov r9,r30
+ 273:can_drv.c     ****             while ((CANGSTA & (1<<ENFG)) == 0); //! Wait for Enable OK
+ 274:can_drv.c     ****             CANGIT = 0xFF;                      //! Reset General errors and OVRTIM flag
+ 525               	.LM70:
+ 526 0186 DD24      		clr r13
+ 527 0188 DA94      		dec r13
+ 528               	.L50:
+ 249:can_drv.c     ****         {
+ 530               	.LM71:
+ 531 018a 1130      		cpi r17,lo8(1)
+ 532 018c 01F0      		breq .+2
+ 533 018e 00C0      		rjmp .L30
+ 251:can_drv.c     ****             conf_index++;
+ 535               	.LM72:
+ 536 0190 1093 D800 		sts 216,r17
+ 252:can_drv.c     ****             ovrtim_flag=0;
+ 538               	.LM73:
+ 539 0194 1196      		adiw r26,1
+ 256:can_drv.c     ****             CANBT2 = (((phs2 >> 1)-1) << SJW) |((prs-1) << PRS);
+ 541               	.LM74:
+ 542 0196 EFEF      		ldi r30,lo8(-1)
+ 543 0198 E50F      		add r30,r21
+ 544 019a EE0F      		lsl r30
+ 545 019c E093 E200 		sts 226,r30
+ 257:can_drv.c     ****             CANBT3 = (((phs2-1) << PHS2) | ((phs1-1) << PHS1) | (1<<SMP));
+ 547               	.LM75:
+ 548 01a0 C22F      		mov r28,r18
+ 549 01a2 C695      		lsr r28
+ 550 01a4 D0E0      		ldi r29,0
+ 551 01a6 2197      		sbiw r28,1
+ 552 01a8 E5E0      		ldi r30,5
+ 553               		1:
+ 554 01aa CC0F      		lsl r28
+ 555 01ac DD1F      		rol r29
+ 556 01ae EA95      		dec r30
+ 557 01b0 01F4      		brne 1b
+ 558 01b2 E42F      		mov r30,r20
+ 559 01b4 F0E0      		ldi r31,0
+ 560 01b6 3197      		sbiw r30,1
+ 561 01b8 EE0F      		lsl r30
+ 562 01ba FF1F      		rol r31
+ 563 01bc EC2B      		or r30,r28
+ 564 01be E093 E300 		sts 227,r30
+ 258:can_drv.c     **** 
+ 566               	.LM76:
+ 567 01c2 C22F      		mov r28,r18
+ 568 01c4 D0E0      		ldi r29,0
+ 569 01c6 2197      		sbiw r28,1
+ 570 01c8 E4E0      		ldi r30,4
+ 571               		1:
+ 572 01ca CC0F      		lsl r28
+ 573 01cc DD1F      		rol r29
+ 574 01ce EA95      		dec r30
+ 575 01d0 01F4      		brne 1b
+ 576 01d2 E92F      		mov r30,r25
+ 577 01d4 F0E0      		ldi r31,0
+ 578 01d6 3197      		sbiw r30,1
+ 579 01d8 EE0F      		lsl r30
+ 580 01da FF1F      		rol r31
+ 581 01dc EC2B      		or r30,r28
+ 582 01de E160      		ori r30,lo8(1)
+ 583 01e0 E093 E400 		sts 228,r30
+ 264:can_drv.c     **** 
+ 585               	.LM77:
+ 586 01e4 FD01      		movw r30,r26
+ 587 01e6 C3E0      		ldi r28,3
+ 588               		1:
+ 589 01e8 F695      		lsr r31
+ 590 01ea E795      		ror r30
+ 591 01ec CA95      		dec r28
+ 592 01ee 01F4      		brne 1b
+ 593 01f0 E093 E500 		sts 229,r30
+ 267:can_drv.c     ****             CANSTMOB = 0;                       //! Reset MOb status (undone by "Can_reset()")
+ 595               	.LM78:
+ 596 01f4 1092 ED00 		sts 237,__zero_reg__
+ 268:can_drv.c     ****             CANCDMOB = (MOB_Rx_ENA  << CONMOB); //! MOb 0 in receive mode
+ 598               	.LM79:
+ 599 01f8 1092 EE00 		sts 238,__zero_reg__
+ 269:can_drv.c     **** 
+ 601               	.LM80:
+ 602 01fc A092 EF00 		sts 239,r10
+ 272:can_drv.c     ****             while ((CANGSTA & (1<<ENFG)) == 0); //! Wait for Enable OK
+ 604               	.LM81:
+ 605 0200 9092 D800 		sts 216,r9
+ 606               	.L31:
+ 273:can_drv.c     ****             CANGIT = 0xFF;                      //! Reset General errors and OVRTIM flag
+ 608               	.LM82:
+ 609 0204 E091 D900 		lds r30,217
+ 610 0208 E2FF      		sbrs r30,2
+ 611 020a 00C0      		rjmp .L31
+ 613               	.LM83:
+ 614 020c D092 DA00 		sts 218,r13
+ 253:can_drv.c     **** 
+ 616               	.LM84:
+ 617 0210 B12C      		mov r11,__zero_reg__
+ 618               	.L30:
+ 275:can_drv.c     ****         }
+ 276:can_drv.c     **** 
+ 277:can_drv.c     ****         //! --- WAIT_FOR_RX LOOP:
+ 278:can_drv.c     ****         //!     ================
+ 279:can_drv.c     ****         //!     Try to perform a CAN message reception in "LISTEN" mode without error and
+ 280:can_drv.c     ****         //!     before a time_out done by CAN-Timer.
+ 281:can_drv.c     ****         //!     Else gives the hand to "EVALUATE LOOP" to have a new set of bit timing.
+ 282:can_drv.c     ****         while (wait_for_rx == 1)
+ 283:can_drv.c     ****         {
+ 284:can_drv.c     ****             u8_temp0 = CANSTMOB;
+ 285:can_drv.c     ****             //! --- RxOK received ?
+ 286:can_drv.c     ****             if ((u8_temp0 & (1<<RXOK)) != 0)
+ 287:can_drv.c     ****             {   //! --- It is the successful output of "can_auto_baudrate" function
+ 288:can_drv.c     ****                 wait_for_rx = 0;    //! Out of "while (wait_for_rx ..." loop
+ 289:can_drv.c     ****                 evaluate = 0;       //! Will skip "while (evaluate ..." loop
+ 290:can_drv.c     ****                 bt_not_found = 0;   //! Out of "while (bt_not_found ..." loop
+ 291:can_drv.c     ****                 bt_performed = 1;   //! Return flag = TRUE
+ 292:can_drv.c     ****                 DISABLE_MOB;        //! Disable MOb-0
+ 293:can_drv.c     ****                 CANGCON = 0x00;     //! Disable CAN controller & reset "listen" mode
+ 294:can_drv.c     ****                 while ((CANGSTA & (1<<ENFG)) != 0); //! Wait for Disable OK
+ 295:can_drv.c     ****             }
+ 296:can_drv.c     ****              //! --- Else stop if any errors
+ 297:can_drv.c     ****              else
+ 298:can_drv.c     ****             {
+ 299:can_drv.c     ****                 //! --- MOb error ?
+ 300:can_drv.c     ****                 if ((u8_temp0 & ((1<<BERR)|(1<<SERR)|(1<<CERR)|(1<<FERR)|(1<<AERR))) !=0)
+ 301:can_drv.c     ****                 {
+ 302:can_drv.c     ****                     evaluate = 1;       //! Will enter in "while (evaluate ..." loop
+ 303:can_drv.c     ****                     wait_for_rx = 0;    //! Out of "while (wait_for_rx ..." loop
+ 304:can_drv.c     ****                 }
+ 305:can_drv.c     **** 
+ 306:can_drv.c     ****                 u8_temp0 = CANGIT;
+ 307:can_drv.c     **** 
+ 308:can_drv.c     ****                 //! --- Time_out reached ?
+ 309:can_drv.c     ****                 if ((u8_temp0 & (1<<OVRTIM)) !=0 )
+ 310:can_drv.c     ****                 {
+ 311:can_drv.c     ****                     if (ovrtim_flag==0)
+ 312:can_drv.c     ****                     {
+ 313:can_drv.c     ****                         //! --- First Time_out
+ 314:can_drv.c     ****                         CANGIT |= (1<<OVRTIM);  // Reset OVRTIM
+ 315:can_drv.c     ****                         ovrtim_flag++;
+ 316:can_drv.c     ****                     }
+ 317:can_drv.c     ****                     else
+ 318:can_drv.c     ****                     {
+ 319:can_drv.c     ****                         //! --- Second Time_out
+ 320:can_drv.c     ****                         CANGIT |= (1<<OVRTIM);  // Reset OVRTIM
+ 321:can_drv.c     ****                         evaluate = 1;           //! Will enter in "while (evaluate ..." loop
+ 322:can_drv.c     ****                         wait_for_rx = 0;        //! Out of "while (wait_for_rx ..." loop
+ 323:can_drv.c     ****                     }
+ 324:can_drv.c     ****                 }
+ 325:can_drv.c     **** 
+ 326:can_drv.c     ****                 //! --- General error ?
+ 327:can_drv.c     ****                 if ((u8_temp0 & ((1<<SERG)|(1<<CERG)|(1<<FERG)|(1<<AERG))) !=0)
+ 328:can_drv.c     ****                 {
+ 329:can_drv.c     ****                     evaluate = 1;       //! Will enter in "while (evaluate ..." loop
+ 330:can_drv.c     ****                     wait_for_rx = 0;    //! Out of "while (wait_for_rx ..." loop
+ 620               	.LM85:
+ 621 0212 CC24      		clr r12
+ 622 0214 C394      		inc r12
+ 623               	.L32:
+ 282:can_drv.c     ****         {
+ 625               	.LM86:
+ 626 0216 3130      		cpi r19,lo8(1)
+ 627 0218 01F4      		brne .L80
+ 284:can_drv.c     ****             //! --- RxOK received ?
+ 629               	.LM87:
+ 630 021a 3091 EE00 		lds r19,238
+ 286:can_drv.c     ****             {   //! --- It is the successful output of "can_auto_baudrate" function
+ 632               	.LM88:
+ 633 021e 35FF      		sbrs r19,5
+ 634 0220 00C0      		rjmp .L33
+ 292:can_drv.c     ****                 CANGCON = 0x00;     //! Disable CAN controller & reset "listen" mode
+ 636               	.LM89:
+ 637 0222 8091 EF00 		lds r24,239
+ 638 0226 8F73      		andi r24,lo8(63)
+ 639 0228 8093 EF00 		sts 239,r24
+ 293:can_drv.c     ****                 while ((CANGSTA & (1<<ENFG)) != 0); //! Wait for Disable OK
+ 641               	.LM90:
+ 642 022c 1092 D800 		sts 216,__zero_reg__
+ 643               	.L34:
+ 294:can_drv.c     ****             }
+ 645               	.LM91:
+ 646 0230 8091 D900 		lds r24,217
+ 647 0234 82FD      		sbrc r24,2
+ 648 0236 00C0      		rjmp .L34
+ 291:can_drv.c     ****                 DISABLE_MOB;        //! Disable MOb-0
+ 650               	.LM92:
+ 651 0238 81E0      		ldi r24,lo8(1)
+ 289:can_drv.c     ****                 bt_not_found = 0;   //! Out of "while (bt_not_found ..." loop
+ 653               	.LM93:
+ 654 023a 00E0      		ldi r16,0
+ 288:can_drv.c     ****                 evaluate = 0;       //! Will skip "while (evaluate ..." loop
+ 656               	.LM94:
+ 657 023c 30E0      		ldi r19,0
+ 290:can_drv.c     ****                 bt_performed = 1;   //! Return flag = TRUE
+ 659               	.LM95:
+ 660 023e C12C      		mov r12,__zero_reg__
+ 661 0240 00C0      		rjmp .L32
+ 662               	.L33:
+ 300:can_drv.c     ****                 {
+ 664               	.LM96:
+ 665 0242 3F71      		andi r19,lo8(31)
+ 666 0244 01F0      		breq .L57
+ 302:can_drv.c     ****                     wait_for_rx = 0;    //! Out of "while (wait_for_rx ..." loop
+ 668               	.LM97:
+ 669 0246 01E0      		ldi r16,lo8(1)
+ 303:can_drv.c     ****                 }
+ 671               	.LM98:
+ 672 0248 30E0      		ldi r19,0
+ 673 024a 00C0      		rjmp .L36
+ 674               	.L57:
+ 675 024c 31E0      		ldi r19,lo8(1)
+ 676               	.L36:
+ 306:can_drv.c     **** 
+ 678               	.LM99:
+ 679 024e E091 DA00 		lds r30,218
+ 309:can_drv.c     ****                 {
+ 681               	.LM100:
+ 682 0252 E5FF      		sbrs r30,5
+ 683 0254 00C0      		rjmp .L37
+ 311:can_drv.c     ****                     {
+ 685               	.LM101:
+ 686 0256 B110      		cpse r11,__zero_reg__
+ 687 0258 00C0      		rjmp .L38
+ 314:can_drv.c     ****                         ovrtim_flag++;
+ 689               	.LM102:
+ 690 025a F091 DA00 		lds r31,218
+ 691 025e F062      		ori r31,lo8(32)
+ 692 0260 F093 DA00 		sts 218,r31
+ 315:can_drv.c     ****                     }
+ 694               	.LM103:
+ 695 0264 BB24      		clr r11
+ 696 0266 B394      		inc r11
+ 697 0268 00C0      		rjmp .L37
+ 698               	.L38:
+ 320:can_drv.c     ****                         evaluate = 1;           //! Will enter in "while (evaluate ..." loop
+ 700               	.LM104:
+ 701 026a 3091 DA00 		lds r19,218
+ 702 026e 3062      		ori r19,lo8(32)
+ 703 0270 3093 DA00 		sts 218,r19
+ 321:can_drv.c     ****                         wait_for_rx = 0;        //! Out of "while (wait_for_rx ..." loop
+ 705               	.LM105:
+ 706 0274 01E0      		ldi r16,lo8(1)
+ 322:can_drv.c     ****                     }
+ 708               	.LM106:
+ 709 0276 30E0      		ldi r19,0
+ 710               	.L37:
+ 327:can_drv.c     ****                 {
+ 712               	.LM107:
+ 713 0278 EF70      		andi r30,lo8(15)
+ 714 027a 01F0      		breq .L32
+ 331:can_drv.c     ****                     try_conf = 1;       //! Try this configuration
+ 716               	.LM108:
+ 717 027c 11E0      		ldi r17,lo8(1)
+ 329:can_drv.c     ****                     wait_for_rx = 0;    //! Out of "while (wait_for_rx ..." loop
+ 719               	.LM109:
+ 720 027e 01E0      		ldi r16,lo8(1)
+ 330:can_drv.c     ****                     try_conf = 1;       //! Try this configuration
+ 722               	.LM110:
+ 723 0280 30E0      		ldi r19,0
+ 724 0282 00C0      		rjmp .L32
+ 725               	.L80:
+ 282:can_drv.c     ****         {
+ 727               	.LM111:
+ 728 0284 30E0      		ldi r19,0
+ 332:can_drv.c     ****                 }
+ 333:can_drv.c     ****             }
+ 334:can_drv.c     ****         } // while (wait_for_rx ...
+ 335:can_drv.c     **** 
+ 336:can_drv.c     ****         //! --- EVALUATE LOOP:
+ 337:can_drv.c     ****         //!     =============
+ 338:can_drv.c     ****         //!     Compute a new bit timing configuration. First, Phase 1 is increased,
+ 339:can_drv.c     ****         //!     then Phase2=Phase1 and if Phase1>5, Phase1 can be equal to Phase2 or
+ 340:can_drv.c     ****         //!     Phase2+1. After this, the number of TQ is increased up to its high
+ 341:can_drv.c     ****         //!     limit and after it is the Prescaler. During the computing high (80%)
+ 342:can_drv.c     ****         //!     and low (75%) limits of sampling point location are tested. SJW and
+ 343:can_drv.c     ****         //!     the number of sampling points are not calculated in this loop.
+ 344:can_drv.c     ****         while (evaluate == 1)
+ 730               	.LM112:
+ 731 0286 0130      		cpi r16,lo8(1)
+ 732 0288 01F0      		breq .+2
+ 733 028a 00C0      		rjmp .L79
+ 734               	.L49:
+ 345:can_drv.c     ****         {
+ 346:can_drv.c     ****             if (phs1_inc != 0) phs1++;
+ 736               	.LM113:
+ 737 028c 7111      		cpse r23,__zero_reg__
+ 739               	.LM114:
+ 740 028e 9F5F      		subi r25,lo8(-(1))
+ 741               	.L41:
+ 347:can_drv.c     ****             phs1_inc = 1;
+ 348:can_drv.c     **** 
+ 349:can_drv.c     ****             // --- The following test takes into account the previous incrementation of phs1
+ 350:can_drv.c     ****             if ((phs1 > PHS1_MAX) && (phs2 >= PHS2_MAX))
+ 743               	.LM115:
+ 744 0290 9930      		cpi r25,lo8(9)
+ 745 0292 00F0      		brlo .L42
+ 747               	.LM116:
+ 748 0294 2830      		cpi r18,lo8(8)
+ 749 0296 00F0      		brlo .L43
+ 351:can_drv.c     ****             {
+ 352:can_drv.c     ****                 phs1 = PHS1_MIN;
+ 353:can_drv.c     ****                 phs2 = PHS2_MIN;
+ 354:can_drv.c     ****                 phs1_inc = 0;
+ 355:can_drv.c     ****                 if (ntq != NTQ_MAX) ntq++;
+ 751               	.LM117:
+ 752 0298 6931      		cpi r22,lo8(25)
+ 753 029a 01F0      		breq .L44
+ 755               	.LM118:
+ 756 029c 6F5F      		subi r22,lo8(-(1))
+ 354:can_drv.c     ****                 if (ntq != NTQ_MAX) ntq++;
+ 758               	.LM119:
+ 759 029e 70E0      		ldi r23,0
+ 353:can_drv.c     ****                 phs1_inc = 0;
+ 761               	.LM120:
+ 762 02a0 22E0      		ldi r18,lo8(2)
+ 352:can_drv.c     ****                 phs2 = PHS2_MIN;
+ 764               	.LM121:
+ 765 02a2 92E0      		ldi r25,lo8(2)
+ 766 02a4 00C0      		rjmp .L49
+ 767               	.L44:
+ 356:can_drv.c     ****                 else
+ 357:can_drv.c     ****                 {
+ 358:can_drv.c     ****                     ntq = NTQ_MIN;
+ 359:can_drv.c     ****                     if (brp != BRP_MAX) brp++;
+ 769               	.LM122:
+ 770 02a6 5034      		cpi r21,lo8(64)
+ 771 02a8 01F0      		breq .L46
+ 773               	.LM123:
+ 774 02aa 5F5F      		subi r21,lo8(-(1))
+ 354:can_drv.c     ****                 if (ntq != NTQ_MAX) ntq++;
+ 776               	.LM124:
+ 777 02ac 70E0      		ldi r23,0
+ 353:can_drv.c     ****                 phs1_inc = 0;
+ 779               	.LM125:
+ 780 02ae 22E0      		ldi r18,lo8(2)
+ 352:can_drv.c     ****                 phs2 = PHS2_MIN;
+ 782               	.LM126:
+ 783 02b0 92E0      		ldi r25,lo8(2)
+ 358:can_drv.c     ****                     if (brp != BRP_MAX) brp++;
+ 785               	.LM127:
+ 786 02b2 68E0      		ldi r22,lo8(8)
+ 787 02b4 00C0      		rjmp .L49
+ 788               	.L46:
+ 360:can_drv.c     ****                     else
+ 361:can_drv.c     ****                     {
+ 362:can_drv.c     ****                         //! --- It is the failing of "can_auto_baudrate" function
+ 363:can_drv.c     ****                         evaluate = 0;       //! Out of "while (evaluate ..." loop
+ 364:can_drv.c     ****                         bt_performed = 0;   //! Return flag = FALSE
+ 365:can_drv.c     ****                         bt_not_found = 0;   //! Out of "while (bt_not_found ..." loop
+ 366:can_drv.c     ****                         DISABLE_MOB;        //! Disable MOb-0
+ 790               	.LM128:
+ 791 02b6 8091 EF00 		lds r24,239
+ 792 02ba 8F73      		andi r24,lo8(63)
+ 793 02bc 8093 EF00 		sts 239,r24
+ 367:can_drv.c     ****                         CANGCON = 0x00;     //! Disable CAN controller & reset "listen" mode
+ 795               	.LM129:
+ 796 02c0 1092 D800 		sts 216,__zero_reg__
+ 797               	.L47:
+ 368:can_drv.c     ****                         while ((CANGSTA & (1<<ENFG)) != 0); //! Wait for Disable OK
+ 799               	.LM130:
+ 800 02c4 8091 D900 		lds r24,217
+ 801 02c8 82FD      		sbrc r24,2
+ 802 02ca 00C0      		rjmp .L47
+ 364:can_drv.c     ****                         bt_not_found = 0;   //! Out of "while (bt_not_found ..." loop
+ 804               	.LM131:
+ 805 02cc 80E0      		ldi r24,0
+ 365:can_drv.c     ****                         DISABLE_MOB;        //! Disable MOb-0
+ 807               	.LM132:
+ 808 02ce C12C      		mov r12,__zero_reg__
+ 354:can_drv.c     ****                 if (ntq != NTQ_MAX) ntq++;
+ 810               	.LM133:
+ 811 02d0 70E0      		ldi r23,0
+ 353:can_drv.c     ****                 phs1_inc = 0;
+ 813               	.LM134:
+ 814 02d2 22E0      		ldi r18,lo8(2)
+ 352:can_drv.c     ****                 phs2 = PHS2_MIN;
+ 816               	.LM135:
+ 817 02d4 92E0      		ldi r25,lo8(2)
+ 358:can_drv.c     ****                     if (brp != BRP_MAX) brp++;
+ 819               	.LM136:
+ 820 02d6 68E0      		ldi r22,lo8(8)
+ 821 02d8 00C0      		rjmp .L79
+ 822               	.L42:
+ 369:can_drv.c     ****                     }
+ 370:can_drv.c     ****                 }
+ 371:can_drv.c     ****             }
+ 372:can_drv.c     ****             else    // if (phs1 > PHS1_MAX ...
+ 373:can_drv.c     ****             {
+ 374:can_drv.c     ****                 //! --- If psh1 > 5 then phs1 =phs2 or =phs2+1, else phs1=phs2
+ 375:can_drv.c     ****                 if (phs1>5)
+ 824               	.LM137:
+ 825 02da 9630      		cpi r25,lo8(6)
+ 826 02dc 00F0      		brlo .L58
+ 827               	.L43:
+ 376:can_drv.c     ****                 {
+ 377:can_drv.c     ****                     if (phs1>(phs2+1)) phs1=(++phs2);
+ 829               	.LM138:
+ 830 02de C92F      		mov r28,r25
+ 831 02e0 D0E0      		ldi r29,0
+ 832 02e2 E22F      		mov r30,r18
+ 833 02e4 F0E0      		ldi r31,0
+ 834 02e6 3196      		adiw r30,1
+ 835 02e8 EC17      		cp r30,r28
+ 836 02ea FD07      		cpc r31,r29
+ 837 02ec 04F4      		brge .L48
+ 839               	.LM139:
+ 840 02ee 2F5F      		subi r18,lo8(-(1))
+ 841 02f0 922F      		mov r25,r18
+ 842 02f2 00C0      		rjmp .L48
+ 843               	.L58:
+ 844 02f4 292F      		mov r18,r25
+ 845               	.L48:
+ 846 02f6 492F      		mov r20,r25
+ 847 02f8 420F      		add r20,r18
+ 378:can_drv.c     ****                 }
+ 379:can_drv.c     ****                 else
+ 380:can_drv.c     ****                 {
+ 381:can_drv.c     ****                 phs2=phs1;
+ 382:can_drv.c     ****                 }
+ 383:can_drv.c     ****                 prs = ntq - ( phs1 + phs2 + 1 );
+ 849               	.LM140:
+ 850 02fa 762F      		mov r23,r22
+ 851 02fc 741B      		sub r23,r20
+ 852 02fe 4FEF      		ldi r20,lo8(-1)
+ 853 0300 470F      		add r20,r23
+ 384:can_drv.c     **** 
+ 385:can_drv.c     ****                 //! --- Test PRS limits
+ 386:can_drv.c     ****                 if ((prs <= PRS_MAX) && (prs >= PRS_MIN))
+ 855               	.LM141:
+ 856 0302 7250      		subi r23,lo8(-(-2))
+ 857 0304 7830      		cpi r23,lo8(8)
+ 858 0306 00F4      		brsh .L61
+ 387:can_drv.c     ****                 {
+ 388:can_drv.c     ****                     //! --- Values  accepted if  80% >= sampling point >= 75%
+ 389:can_drv.c     ****                     if (((phs2<<2) >= (1+prs+phs1)) && ((phs2+phs2+phs2) <= (1+prs+phs1)))
+ 860               	.LM142:
+ 861 0308 E22E      		mov r14,r18
+ 862 030a F12C      		mov r15,__zero_reg__
+ 863 030c E42F      		mov r30,r20
+ 864 030e F0E0      		ldi r31,0
+ 865 0310 3196      		adiw r30,1
+ 866 0312 E90F      		add r30,r25
+ 867 0314 F11D      		adc r31,__zero_reg__
+ 868 0316 E701      		movw r28,r14
+ 869 0318 CC0F      		lsl r28
+ 870 031a DD1F      		rol r29
+ 871 031c CC0F      		lsl r28
+ 872 031e DD1F      		rol r29
+ 873 0320 CE17      		cp r28,r30
+ 874 0322 DF07      		cpc r29,r31
+ 875 0324 04F0      		brlt .L61
+ 877               	.LM143:
+ 878 0326 E701      		movw r28,r14
+ 879 0328 CC0F      		lsl r28
+ 880 032a DD1F      		rol r29
+ 881 032c CE0D      		add r28,r14
+ 882 032e DF1D      		adc r29,r15
+ 883 0330 EC17      		cp r30,r28
+ 884 0332 FD07      		cpc r31,r29
+ 885 0334 04F0      		brlt .L61
+ 347:can_drv.c     **** 
+ 887               	.LM144:
+ 888 0336 71E0      		ldi r23,lo8(1)
+ 390:can_drv.c     ****                     {
+ 391:can_drv.c     ****                         evaluate = 0;     //! Out of "while (evaluate ..." loop &
+ 392:can_drv.c     ****                         wait_for_rx = 1;  //!    new "while (bt_not_found ..." loop
+ 890               	.LM145:
+ 891 0338 31E0      		ldi r19,lo8(1)
+ 892 033a 00C0      		rjmp .L79
+ 893               	.L61:
+ 347:can_drv.c     **** 
+ 895               	.LM146:
+ 896 033c 71E0      		ldi r23,lo8(1)
+ 897 033e 00C0      		rjmp .L49
+ 898               	.L79:
+ 899 0340 00E0      		ldi r16,0
+ 247:can_drv.c     ****     {
+ 901               	.LM147:
+ 902 0342 E1E0      		ldi r30,lo8(1)
+ 903 0344 CE16      		cp r12,r30
+ 904 0346 01F4      		brne .+2
+ 905 0348 00C0      		rjmp .L50
+ 906               	/* epilogue start */
+ 393:can_drv.c     ****                     }
+ 394:can_drv.c     ****                 }
+ 395:can_drv.c     ****             }
+ 396:can_drv.c     ****         } // while (evaluate ...
+ 397:can_drv.c     ****     } // while (bt_not_found ...
+ 398:can_drv.c     **** 
+ 399:can_drv.c     ****     return (bt_performed);
+ 400:can_drv.c     **** }
+ 908               	.LM148:
+ 909 034a DF91      		pop r29
+ 910 034c CF91      		pop r28
+ 911 034e 1F91      		pop r17
+ 912 0350 0F91      		pop r16
+ 913 0352 FF90      		pop r15
+ 914 0354 EF90      		pop r14
+ 915 0356 DF90      		pop r13
+ 916 0358 CF90      		pop r12
+ 917 035a BF90      		pop r11
+ 918 035c AF90      		pop r10
+ 919 035e 9F90      		pop r9
+ 920 0360 0895      		ret
+ 934               	.Lscope5:
+ 937               	.global	can_fixed_baudrate
+ 939               	can_fixed_baudrate:
+ 401:can_drv.c     **** 
+ 402:can_drv.c     **** //------------------------------------------------------------------------------
+ 403:can_drv.c     **** //  @fn can_fixed_baudrate
+ 404:can_drv.c     **** //!
+ 405:can_drv.c     **** //! This function programs the CANBTx registers with the predefined values
+ 406:can_drv.c     **** //! CONF_CANBT1, CONF_CANBT2, CONF_CANBT3.
+ 407:can_drv.c     **** //!
+ 408:can_drv.c     **** //! @warning
+ 409:can_drv.c     **** //!
+ 410:can_drv.c     **** //! @param (unused!)
+ 411:can_drv.c     **** //!
+ 412:can_drv.c     **** //! @return Baudrate Status
+ 413:can_drv.c     **** //!         fixed = 1: baudrate performed
+ 414:can_drv.c     **** //------------------------------------------------------------------------------
+ 415:can_drv.c     **** uint8_t can_fixed_baudrate(uint8_t mode)
+ 416:can_drv.c     **** {
+ 941               	.LM149:
+ 942               	.LFBB6:
+ 943               	/* prologue: function */
+ 944               	/* frame size = 0 */
+ 945               	/* stack size = 0 */
+ 946               	.L__stack_usage = 0
+ 417:can_drv.c     ****     Can_reset();
+ 948               	.LM150:
+ 949 0362 81E0      		ldi r24,lo8(1)
+ 950 0364 8093 D800 		sts 216,r24
+ 418:can_drv.c     ****     Can_conf_bt();
+ 952               	.LM151:
+ 953 0368 82E0      		ldi r24,lo8(2)
+ 954 036a 8093 E200 		sts 226,r24
+ 955 036e 84E0      		ldi r24,lo8(4)
+ 956 0370 8093 E300 		sts 227,r24
+ 957 0374 83E1      		ldi r24,lo8(19)
+ 958 0376 8093 E400 		sts 228,r24
+ 419:can_drv.c     ****     return 1;
+ 420:can_drv.c     **** }...
+ 960               	.LM152:
+ 961 037a 81E0      		ldi r24,lo8(1)
+ 962 037c 0895      		ret
+ 964               	.Lscope6:
+ 966               	.Letext0:
+ 967               		.ident	"GCC: (GNU) 4.9.2"
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 can_drv.c
+     /tmp/ccL1584l.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/ccL1584l.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/ccL1584l.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/ccL1584l.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccL1584l.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccL1584l.s:111    .text:0000000000000000 can_clear_all_mob
+     /tmp/ccL1584l.s:162    .text:0000000000000020 can_get_mob_free
+     /tmp/ccL1584l.s:218    .text:000000000000004c can_get_mob_status
+     /tmp/ccL1584l.s:279    .text:000000000000007c can_get_data
+     /tmp/ccL1584l.s:327    .text:00000000000000a4 can_auto_baudrate
+     /tmp/ccL1584l.s:939    .text:0000000000000362 can_fixed_baudrate
+
+NO UNDEFINED SYMBOLS

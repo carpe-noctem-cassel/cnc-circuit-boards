@@ -1,0 +1,1904 @@
+   1               		.file	"messages.c"
+   2               	__SP_H__ = 0x3e
+   3               	__SP_L__ = 0x3d
+   4               	__SREG__ = 0x3f
+   5               	__tmp_reg__ = 0
+   6               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 127               	.global	generate_extCAN_ID
+ 129               	generate_extCAN_ID:
+   1:messages.c    **** /*
+   2:messages.c    ****  * can.c
+   3:messages.c    ****  *
+   4:messages.c    ****  *  Created on: Sep 9, 2016
+   5:messages.c    ****  *      Author: cn
+   6:messages.c    ****  */
+   7:messages.c    **** 
+   8:messages.c    **** #include "messages.h"
+   9:messages.c    **** 
+  10:messages.c    **** #include "booster.h"
+  11:messages.c    **** 
+  12:messages.c    **** #include "defaults.h"
+  13:messages.c    **** #include "global.h"
+  14:messages.c    **** #include "version.h"
+  15:messages.c    **** 
+  16:messages.c    **** tExtendedCAN can_buffer[CAN_MSG_BUFFER_LENGTH];
+  17:messages.c    **** uint8_t tx_buffer[DATA_BUFFER_SIZE];
+  18:messages.c    **** uint8_t rx_buffer[DATA_BUFFER_SIZE];	// buffer to hold data from ipc
+  19:messages.c    **** 
+  20:messages.c    **** st_cmd_t tx_msg; // Tx MOb (MOb to Tranceive Data)
+  21:messages.c    **** st_cmd_t rx_msg; // Rx Mob (MOb for Receiving Data)
+  22:messages.c    **** 
+  23:messages.c    **** 
+  24:messages.c    **** uint8_t can_buffer_head = 0;
+  25:messages.c    **** uint8_t can_buffer_tail = 0;
+  26:messages.c    **** 
+  27:messages.c    **** // prototypes
+  28:messages.c    **** void parse_default(uint8_t *data, uint8_t length);
+  29:messages.c    **** void parse_manual(uint8_t *data, uint8_t length);
+  30:messages.c    **** 
+  31:messages.c    **** void (*parse_data)(uint8_t *, uint8_t) = parse_default;
+  32:messages.c    **** 
+  33:messages.c    **** 
+  34:messages.c    **** void communication_init()
+  35:messages.c    **** {
+  36:messages.c    **** 	SET_OUTPUT(CAN_TX);
+  37:messages.c    **** 	RESET(CAN_TX);
+  38:messages.c    **** 	SET_INPUT(CAN_RX);
+  39:messages.c    **** 	RESET(CAN_RX);
+  40:messages.c    **** 
+  41:messages.c    **** 	can_init(0);
+  42:messages.c    **** 
+  43:messages.c    **** 	// Interrupts aktivieren?
+  44:messages.c    **** 
+  45:messages.c    **** 	// Receive-Buffer
+  46:messages.c    **** 	rx_msg.pt_data = &rx_buffer[0];		// Point Rx MOb to first element of buffer
+  47:messages.c    **** 	rx_msg.status = 0;					// clear status
+  48:messages.c    **** 	configureRxMOb();
+  49:messages.c    **** 	
+  50:messages.c    **** 	// Transmit-Buffer
+  51:messages.c    **** 	tx_msg.pt_data = &tx_buffer[0];		// Point Tx MOb to first element of buffer
+  52:messages.c    **** 	tx_msg.status = 0;					// clear status
+  53:messages.c    **** }
+  54:messages.c    **** 
+  55:messages.c    **** void message_handler()
+  56:messages.c    **** {
+  57:messages.c    **** 	message_receive_handler();
+  58:messages.c    **** 	message_transmit_handler();
+  59:messages.c    **** }
+  60:messages.c    **** 
+  61:messages.c    **** void message_receive_handler()
+  62:messages.c    **** {
+  63:messages.c    **** 	switch (can_get_status(&rx_msg)) {
+  64:messages.c    **** 		case CAN_STATUS_COMPLETED:
+  65:messages.c    **** 			// Message received
+  66:messages.c    **** 			if ((rx_msg.id.ext & 0x000000FF) == REKICK_ID) {	// Ext-ID masked with 0x000000FF
+  67:messages.c    **** 				parse_data(rx_msg.pt_data, rx_msg.dlc);
+  68:messages.c    **** 			}
+  69:messages.c    **** 			rx_msg.status = 0;	// clear status
+  70:messages.c    **** 			break;
+  71:messages.c    **** 			
+  72:messages.c    **** 		case CAN_STATUS_NOT_COMPLETED:
+  73:messages.c    **** 			// waiting for Message
+  74:messages.c    **** 			return;
+  75:messages.c    **** 			break;
+  76:messages.c    **** 			
+  77:messages.c    **** 		case CAN_STATUS_ERROR:
+  78:messages.c    **** 			// CAN ERROR HANDLING
+  79:messages.c    **** 			
+  80:messages.c    **** 		default:
+  81:messages.c    **** 			rx_msg.cmd = CMD_ABORT;
+  82:messages.c    **** 			while (can_cmd(&rx_msg) != CAN_CMD_ACCEPTED);
+  83:messages.c    **** 			rx_msg.status = 0;	// clear status
+  84:messages.c    **** 			break;
+  85:messages.c    **** 	}
+  86:messages.c    **** 
+  87:messages.c    **** 	configureRxMOb();	// activate Rx MOb again
+  88:messages.c    **** }
+  89:messages.c    **** 
+  90:messages.c    **** void message_transmit_handler()
+  91:messages.c    **** {
+  92:messages.c    **** 	if (can_buffer_head == can_buffer_tail)
+  93:messages.c    **** 		return;
+  94:messages.c    **** 
+  95:messages.c    **** 	if (sendMsg(&can_buffer[can_buffer_tail]) > 0)
+  96:messages.c    **** 	{
+  97:messages.c    **** 		// sendMsg successful
+  98:messages.c    **** 		if (++can_buffer_tail == CAN_MSG_BUFFER_LENGTH)
+  99:messages.c    **** 			can_buffer_tail = 0;
+ 100:messages.c    **** 	} else
+ 101:messages.c    **** 	{
+ 102:messages.c    **** 		// sendMsg not successful
+ 103:messages.c    **** 		tx_msg.cmd = CMD_ABORT;
+ 104:messages.c    **** 		while (can_cmd(&tx_msg) != CAN_CMD_ACCEPTED);
+ 105:messages.c    **** 		tx_msg.status = 0;	// clear status
+ 106:messages.c    **** 
+ 107:messages.c    **** 		// Some more Error handling?
+ 108:messages.c    **** 		// CAN ERROR HANDLING
+ 109:messages.c    **** 	}
+ 110:messages.c    **** }
+ 111:messages.c    **** 
+ 112:messages.c    **** void generate_extCAN_ID(uint8_t *bytes, uint32_t *result)
+ 113:messages.c    **** {
+ 131               	.LM0:
+ 132               	.LFBB1:
+ 133 0000 0F93      		push r16
+ 134 0002 1F93      		push r17
+ 135               	/* prologue: function */
+ 136               	/* frame size = 0 */
+ 137               	/* stack size = 2 */
+ 138               	.L__stack_usage = 2
+ 139 0004 FC01      		movw r30,r24
+ 140 0006 DB01      		movw r26,r22
+ 114:messages.c    **** 	*result = (bytes[0] << 3) | (bytes[1] >> 5);
+ 142               	.LM1:
+ 143 0008 8181      		ldd r24,Z+1
+ 144 000a 8295      		swap r24
+ 145 000c 8695      		lsr r24
+ 146 000e 8770      		andi r24,lo8(7)
+ 147 0010 4081      		ld r20,Z
+ 148 0012 98E0      		ldi r25,lo8(8)
+ 149 0014 499F      		mul r20,r25
+ 150 0016 A001      		movw r20,r0
+ 151 0018 1124      		clr __zero_reg__
+ 152 001a 482B      		or r20,r24
+ 153 001c 8A01      		movw r16,r20
+ 154 001e 550F      		lsl r21
+ 155 0020 220B      		sbc r18,r18
+ 156 0022 330B      		sbc r19,r19
+ 157 0024 0D93      		st X+,r16
+ 158 0026 1D93      		st X+,r17
+ 159 0028 2D93      		st X+,r18
+ 160 002a 3C93      		st X,r19
+ 161 002c 1397      		sbiw r26,3
+ 115:messages.c    **** 	*result |= (uint32_t) ((bytes[1] & 0x03) | 0x0C | ((bytes[1] & 0xFC) << 3)) << 8;
+ 163               	.LM2:
+ 164 002e 8181      		ldd r24,Z+1
+ 165 0030 482F      		mov r20,r24
+ 166 0032 4C7F      		andi r20,lo8(-4)
+ 167 0034 98E0      		ldi r25,lo8(8)
+ 168 0036 499F      		mul r20,r25
+ 169 0038 A001      		movw r20,r0
+ 170 003a 1124      		clr __zero_reg__
+ 171 003c 8370      		andi r24,lo8(3)
+ 172 003e 8C60      		ori r24,lo8(12)
+ 173 0040 482B      		or r20,r24
+ 174 0042 052E      		mov __tmp_reg__,r21
+ 175 0044 000C      		lsl r0
+ 176 0046 660B      		sbc r22,r22
+ 177 0048 770B      		sbc r23,r23
+ 178 004a 762F      		mov r23,r22
+ 179 004c 652F      		mov r22,r21
+ 180 004e 542F      		mov r21,r20
+ 181 0050 4427      		clr r20
+ 182 0052 402B      		or r20,r16
+ 183 0054 512B      		or r21,r17
+ 184 0056 622B      		or r22,r18
+ 185 0058 732B      		or r23,r19
+ 186 005a 4D93      		st X+,r20
+ 187 005c 5D93      		st X+,r21
+ 188 005e 6D93      		st X+,r22
+ 189 0060 7C93      		st X,r23
+ 190 0062 1397      		sbiw r26,3
+ 116:messages.c    **** 	*result |= (uint32_t) bytes[2] << 16;
+ 192               	.LM3:
+ 193 0064 8281      		ldd r24,Z+2
+ 194 0066 682B      		or r22,r24
+ 195 0068 4D93      		st X+,r20
+ 196 006a 5D93      		st X+,r21
+ 197 006c 6D93      		st X+,r22
+ 198 006e 7C93      		st X,r23
+ 199 0070 1397      		sbiw r26,3
+ 117:messages.c    **** 	*result |= (uint32_t) bytes[3] << 24;
+ 201               	.LM4:
+ 202 0072 8381      		ldd r24,Z+3
+ 203 0074 782B      		or r23,r24
+ 204 0076 4D93      		st X+,r20
+ 205 0078 5D93      		st X+,r21
+ 206 007a 6D93      		st X+,r22
+ 207 007c 7C93      		st X,r23
+ 208 007e 1397      		sbiw r26,3
+ 209               	/* epilogue start */
+ 118:messages.c    **** }
+ 211               	.LM5:
+ 212 0080 1F91      		pop r17
+ 213 0082 0F91      		pop r16
+ 214 0084 0895      		ret
+ 216               	.Lscope1:
+ 218               	.global	configureRxMOb
+ 220               	configureRxMOb:
+ 119:messages.c    **** 
+ 120:messages.c    **** void configureRxMOb()
+ 121:messages.c    **** {
+ 222               	.LM6:
+ 223               	.LFBB2:
+ 224               	/* prologue: function */
+ 225               	/* frame size = 0 */
+ 226               	/* stack size = 0 */
+ 227               	.L__stack_usage = 0
+ 228 0086 E0E0      		ldi r30,lo8(rx_buffer)
+ 229 0088 F0E0      		ldi r31,hi8(rx_buffer)
+ 230               	.L3:
+ 231               	.LBB4:
+ 122:messages.c    **** 	for(int i=0; i<DATA_BUFFER_SIZE; i++) {rx_buffer[i] = 0;}	// clear message object data buffer
+ 233               	.LM7:
+ 234 008a 1192      		st Z+,__zero_reg__
+ 235 008c 80E0      		ldi r24,hi8(rx_buffer+8)
+ 236 008e E030      		cpi r30,lo8(rx_buffer+8)
+ 237 0090 F807      		cpc r31,r24
+ 238 0092 01F4      		brne .L3
+ 239               	.LBE4:
+ 123:messages.c    **** 
+ 124:messages.c    **** 	rx_msg.id.ext = 0x00000000;			// This message object only accepts frames from Target IDs (0x80) to
+ 241               	.LM8:
+ 242 0094 1092 0000 		sts rx_msg+2,__zero_reg__
+ 243 0098 1092 0000 		sts rx_msg+2+1,__zero_reg__
+ 244 009c 1092 0000 		sts rx_msg+2+2,__zero_reg__
+ 245 00a0 1092 0000 		sts rx_msg+2+3,__zero_reg__
+ 125:messages.c    **** 	rx_msg.ctrl.ide = 1;				// This message object accepts only extended (2.0B) CAN frames
+ 247               	.LM9:
+ 248 00a4 81E0      		ldi r24,lo8(1)
+ 249 00a6 8093 0000 		sts rx_msg+11,r24
+ 126:messages.c    **** 	rx_msg.ctrl.rtr = 0;				// this message object is not requesting a remote node to transmit data ba
+ 251               	.LM10:
+ 252 00aa 1092 0000 		sts rx_msg+10,__zero_reg__
+ 127:messages.c    **** 	rx_msg.dlc = DATA_BUFFER_SIZE;		// Number of bytes (8 max) of data to expect
+ 254               	.LM11:
+ 255 00ae 88E0      		ldi r24,lo8(8)
+ 256 00b0 8093 0000 		sts rx_msg+6,r24
+ 128:messages.c    **** 	rx_msg.cmd = CMD_RX_DATA;			// assign this as a "Receive Extended (2.0B) CAN frame" message object
+ 258               	.LM12:
+ 259 00b4 85E0      		ldi r24,lo8(5)
+ 260 00b6 8093 0000 		sts rx_msg+1,r24
+ 261               	.L4:
+ 129:messages.c    **** 
+ 130:messages.c    **** 	while(can_cmd(&rx_msg) != CAN_CMD_ACCEPTED); // Wait for MOb to configure (Must re-configure MOb f
+ 263               	.LM13:
+ 264 00ba 80E0      		ldi r24,lo8(rx_msg)
+ 265 00bc 90E0      		ldi r25,hi8(rx_msg)
+ 266 00be 0E94 0000 		call can_cmd
+ 267 00c2 8111      		cpse r24,__zero_reg__
+ 268 00c4 00C0      		rjmp .L4
+ 269               	/* epilogue start */
+ 131:messages.c    **** }
+ 271               	.LM14:
+ 272 00c6 0895      		ret
+ 274               	.Lscope2:
+ 276               	.global	communication_init
+ 278               	communication_init:
+  35:messages.c    **** 	SET_OUTPUT(CAN_TX);
+ 280               	.LM15:
+ 281               	.LFBB3:
+ 282               	/* prologue: function */
+ 283               	/* frame size = 0 */
+ 284               	/* stack size = 0 */
+ 285               	.L__stack_usage = 0
+  36:messages.c    **** 	RESET(CAN_TX);
+ 287               	.LM16:
+ 288 00c8 3A9A      		sbi 0x7,2
+  37:messages.c    **** 	SET_INPUT(CAN_RX);
+ 290               	.LM17:
+ 291 00ca 4298      		cbi 0x8,2
+  38:messages.c    **** 	RESET(CAN_RX);
+ 293               	.LM18:
+ 294 00cc 3B98      		cbi 0x7,3
+  39:messages.c    **** 
+ 296               	.LM19:
+ 297 00ce 4398      		cbi 0x8,3
+  41:messages.c    **** 
+ 299               	.LM20:
+ 300 00d0 80E0      		ldi r24,0
+ 301 00d2 0E94 0000 		call can_init
+  46:messages.c    **** 	rx_msg.status = 0;					// clear status
+ 303               	.LM21:
+ 304 00d6 E0E0      		ldi r30,lo8(rx_msg)
+ 305 00d8 F0E0      		ldi r31,hi8(rx_msg)
+ 306 00da 80E0      		ldi r24,lo8(rx_buffer)
+ 307 00dc 90E0      		ldi r25,hi8(rx_buffer)
+ 308 00de 9087      		std Z+8,r25
+ 309 00e0 8783      		std Z+7,r24
+  47:messages.c    **** 	configureRxMOb();
+ 311               	.LM22:
+ 312 00e2 1186      		std Z+9,__zero_reg__
+  48:messages.c    **** 	
+ 314               	.LM23:
+ 315 00e4 0E94 0000 		call configureRxMOb
+  51:messages.c    **** 	tx_msg.status = 0;					// clear status
+ 317               	.LM24:
+ 318 00e8 E0E0      		ldi r30,lo8(tx_msg)
+ 319 00ea F0E0      		ldi r31,hi8(tx_msg)
+ 320 00ec 80E0      		ldi r24,lo8(tx_buffer)
+ 321 00ee 90E0      		ldi r25,hi8(tx_buffer)
+ 322 00f0 9087      		std Z+8,r25
+ 323 00f2 8783      		std Z+7,r24
+  52:messages.c    **** }
+ 325               	.LM25:
+ 326 00f4 1186      		std Z+9,__zero_reg__
+ 327 00f6 0895      		ret
+ 329               	.Lscope3:
+ 331               	.global	message_receive_handler
+ 333               	message_receive_handler:
+  62:messages.c    **** 	switch (can_get_status(&rx_msg)) {
+ 335               	.LM26:
+ 336               	.LFBB4:
+ 337               	/* prologue: function */
+ 338               	/* frame size = 0 */
+ 339               	/* stack size = 0 */
+ 340               	.L__stack_usage = 0
+  63:messages.c    **** 		case CAN_STATUS_COMPLETED:
+ 342               	.LM27:
+ 343 00f8 80E0      		ldi r24,lo8(rx_msg)
+ 344 00fa 90E0      		ldi r25,hi8(rx_msg)
+ 345 00fc 0E94 0000 		call can_get_status
+ 346 0100 8823      		tst r24
+ 347 0102 01F0      		breq .L11
+ 348 0104 8130      		cpi r24,lo8(1)
+ 349 0106 01F0      		breq .L9
+  81:messages.c    **** 			while (can_cmd(&rx_msg) != CAN_CMD_ACCEPTED);
+ 351               	.LM28:
+ 352 0108 8CE0      		ldi r24,lo8(12)
+ 353 010a 8093 0000 		sts rx_msg+1,r24
+  82:messages.c    **** 			rx_msg.status = 0;	// clear status
+ 355               	.LM29:
+ 356 010e 00C0      		rjmp .L14
+ 357               	.L11:
+  66:messages.c    **** 				parse_data(rx_msg.pt_data, rx_msg.dlc);
+ 359               	.LM30:
+ 360 0110 8091 0000 		lds r24,rx_msg+2
+ 361 0114 8036      		cpi r24,lo8(96)
+ 362 0116 01F4      		brne .L13
+  67:messages.c    **** 			}
+ 364               	.LM31:
+ 365 0118 E091 0000 		lds r30,parse_data
+ 366 011c F091 0000 		lds r31,parse_data+1
+ 367 0120 6091 0000 		lds r22,rx_msg+6
+ 368 0124 8091 0000 		lds r24,rx_msg+7
+ 369 0128 9091 0000 		lds r25,rx_msg+7+1
+ 370 012c 0995      		icall
+ 371               	.L13:
+  69:messages.c    **** 			break;
+ 373               	.LM32:
+ 374 012e 1092 0000 		sts rx_msg+9,__zero_reg__
+  87:messages.c    **** }
+ 376               	.LM33:
+ 377 0132 0C94 0000 		jmp configureRxMOb
+ 378               	.L14:
+  82:messages.c    **** 			rx_msg.status = 0;	// clear status
+ 380               	.LM34:
+ 381 0136 80E0      		ldi r24,lo8(rx_msg)
+ 382 0138 90E0      		ldi r25,hi8(rx_msg)
+ 383 013a 0E94 0000 		call can_cmd
+ 384 013e 8111      		cpse r24,__zero_reg__
+ 385 0140 00C0      		rjmp .L14
+ 386 0142 00C0      		rjmp .L13
+ 387               	.L9:
+ 388 0144 0895      		ret
+ 390               	.Lscope4:
+ 393               	.global	sendMsg
+ 395               	sendMsg:
+ 132:messages.c    **** 
+ 133:messages.c    **** int8_t sendMsg(tExtendedCAN *message)
+ 134:messages.c    **** {
+ 397               	.LM35:
+ 398               	.LFBB5:
+ 399 0146 CF93      		push r28
+ 400 0148 DF93      		push r29
+ 401               	/* prologue: function */
+ 402               	/* frame size = 0 */
+ 403               	/* stack size = 2 */
+ 404               	.L__stack_usage = 2
+ 405 014a EC01      		movw r28,r24
+ 135:messages.c    **** 	memcpy(tx_buffer, message->data, message->length);
+ 407               	.LM36:
+ 408 014c 4C85      		ldd r20,Y+12
+ 409 014e 50E0      		ldi r21,0
+ 410 0150 BC01      		movw r22,r24
+ 411 0152 6C5F      		subi r22,-4
+ 412 0154 7F4F      		sbci r23,-1
+ 413 0156 80E0      		ldi r24,lo8(tx_buffer)
+ 414 0158 90E0      		ldi r25,hi8(tx_buffer)
+ 415 015a 0E94 0000 		call memcpy
+ 136:messages.c    **** 
+ 137:messages.c    **** 	tx_msg.id.ext = message->id;		// This message object only sends frames to Target IDs
+ 417               	.LM37:
+ 418 015e 8881      		ld r24,Y
+ 419 0160 9981      		ldd r25,Y+1
+ 420 0162 AA81      		ldd r26,Y+2
+ 421 0164 BB81      		ldd r27,Y+3
+ 422 0166 8093 0000 		sts tx_msg+2,r24
+ 423 016a 9093 0000 		sts tx_msg+2+1,r25
+ 424 016e A093 0000 		sts tx_msg+2+2,r26
+ 425 0172 B093 0000 		sts tx_msg+2+3,r27
+ 138:messages.c    **** 	tx_msg.ctrl.ide = 1;				// This message object sends extended (2.0B) CAN frames
+ 427               	.LM38:
+ 428 0176 81E0      		ldi r24,lo8(1)
+ 429 0178 8093 0000 		sts tx_msg+11,r24
+ 139:messages.c    **** 	tx_msg.ctrl.rtr = 0;				// This message object is sending Data
+ 431               	.LM39:
+ 432 017c 1092 0000 		sts tx_msg+10,__zero_reg__
+ 140:messages.c    **** 	tx_msg.dlc = message->length;		// Number of data bytes (8 max)
+ 434               	.LM40:
+ 435 0180 8C85      		ldd r24,Y+12
+ 436 0182 8093 0000 		sts tx_msg+6,r24
+ 141:messages.c    **** 	tx_msg.cmd = CMD_TX_DATA;
+ 438               	.LM41:
+ 439 0186 82E0      		ldi r24,lo8(2)
+ 440 0188 8093 0000 		sts tx_msg+1,r24
+ 441               	.L18:
+ 142:messages.c    **** 
+ 143:messages.c    **** 	while(can_cmd(&tx_msg) != CAN_CMD_ACCEPTED); // Wait for MOb to configure (Must re-configure MOb f
+ 443               	.LM42:
+ 444 018c 80E0      		ldi r24,lo8(tx_msg)
+ 445 018e 90E0      		ldi r25,hi8(tx_msg)
+ 446 0190 0E94 0000 		call can_cmd
+ 447 0194 8111      		cpse r24,__zero_reg__
+ 448 0196 00C0      		rjmp .L18
+ 449               	.L19:
+ 144:messages.c    **** 	while(can_get_status(&tx_msg) == CAN_STATUS_NOT_COMPLETED);	// Wait for Tx to complete
+ 451               	.LM43:
+ 452 0198 80E0      		ldi r24,lo8(tx_msg)
+ 453 019a 90E0      		ldi r25,hi8(tx_msg)
+ 454 019c 0E94 0000 		call can_get_status
+ 455 01a0 8130      		cpi r24,lo8(1)
+ 456 01a2 01F0      		breq .L19
+ 145:messages.c    **** 
+ 146:messages.c    **** 	switch (tx_msg.status)
+ 147:messages.c    **** 	{
+ 148:messages.c    **** 		case MOB_TX_COMPLETED:
+ 149:messages.c    **** 			break;
+ 150:messages.c    **** 
+ 151:messages.c    **** 		case MOB_ACK_ERROR:
+ 152:messages.c    **** 		case MOB_FORM_ERROR:
+ 153:messages.c    **** 		case MOB_CRC_ERROR:
+ 154:messages.c    **** 		case MOB_STUFF_ERROR:
+ 155:messages.c    **** 		case MOB_BIT_ERROR:
+ 156:messages.c    **** 			// Error Handling
+ 157:messages.c    **** 			break;
+ 158:messages.c    **** 
+ 159:messages.c    **** 		default:
+ 160:messages.c    **** 			break;
+ 161:messages.c    **** 	}
+ 162:messages.c    **** 	return 1;
+ 163:messages.c    **** }
+ 458               	.LM44:
+ 459 01a4 81E0      		ldi r24,lo8(1)
+ 460               	/* epilogue start */
+ 461 01a6 DF91      		pop r29
+ 462 01a8 CF91      		pop r28
+ 463 01aa 0895      		ret
+ 465               	.Lscope5:
+ 467               	.global	message_transmit_handler
+ 469               	message_transmit_handler:
+  91:messages.c    **** 	if (can_buffer_head == can_buffer_tail)
+ 471               	.LM45:
+ 472               	.LFBB6:
+ 473               	/* prologue: function */
+ 474               	/* frame size = 0 */
+ 475               	/* stack size = 0 */
+ 476               	.L__stack_usage = 0
+  92:messages.c    **** 		return;
+ 478               	.LM46:
+ 479 01ac 8091 0000 		lds r24,can_buffer_tail
+ 480 01b0 9091 0000 		lds r25,can_buffer_head
+ 481 01b4 9817      		cp r25,r24
+ 482 01b6 01F0      		breq .L23
+  95:messages.c    **** 	{
+ 484               	.LM47:
+ 485 01b8 2DE0      		ldi r18,lo8(13)
+ 486 01ba 829F      		mul r24,r18
+ 487 01bc C001      		movw r24,r0
+ 488 01be 1124      		clr __zero_reg__
+ 489 01c0 8050      		subi r24,lo8(-(can_buffer))
+ 490 01c2 9040      		sbci r25,hi8(-(can_buffer))
+ 491 01c4 0E94 0000 		call sendMsg
+ 492 01c8 1816      		cp __zero_reg__,r24
+ 493 01ca 04F4      		brge .L26
+  98:messages.c    **** 			can_buffer_tail = 0;
+ 495               	.LM48:
+ 496 01cc 8091 0000 		lds r24,can_buffer_tail
+ 497 01d0 8F5F      		subi r24,lo8(-(1))
+ 498 01d2 8431      		cpi r24,lo8(20)
+ 499 01d4 01F0      		breq .L27
+ 500 01d6 8093 0000 		sts can_buffer_tail,r24
+ 501 01da 0895      		ret
+ 502               	.L27:
+  99:messages.c    **** 	} else
+ 504               	.LM49:
+ 505 01dc 1092 0000 		sts can_buffer_tail,__zero_reg__
+ 506 01e0 0895      		ret
+ 507               	.L26:
+ 508               	.LBB7:
+ 509               	.LBB8:
+ 103:messages.c    **** 		while (can_cmd(&tx_msg) != CAN_CMD_ACCEPTED);
+ 511               	.LM50:
+ 512 01e2 8CE0      		ldi r24,lo8(12)
+ 513 01e4 8093 0000 		sts tx_msg+1,r24
+ 514               	.L29:
+ 104:messages.c    **** 		tx_msg.status = 0;	// clear status
+ 516               	.LM51:
+ 517 01e8 80E0      		ldi r24,lo8(tx_msg)
+ 518 01ea 90E0      		ldi r25,hi8(tx_msg)
+ 519 01ec 0E94 0000 		call can_cmd
+ 520 01f0 8111      		cpse r24,__zero_reg__
+ 521 01f2 00C0      		rjmp .L29
+ 105:messages.c    **** 
+ 523               	.LM52:
+ 524 01f4 1092 0000 		sts tx_msg+9,__zero_reg__
+ 525               	.L23:
+ 526 01f8 0895      		ret
+ 527               	.LBE8:
+ 528               	.LBE7:
+ 530               	.Lscope6:
+ 532               	.global	message_handler
+ 534               	message_handler:
+  56:messages.c    **** 	message_receive_handler();
+ 536               	.LM53:
+ 537               	.LFBB7:
+ 538               	/* prologue: function */
+ 539               	/* frame size = 0 */
+ 540               	/* stack size = 0 */
+ 541               	.L__stack_usage = 0
+  57:messages.c    **** 	message_transmit_handler();
+ 543               	.LM54:
+ 544 01fa 0E94 0000 		call message_receive_handler
+  58:messages.c    **** }
+ 546               	.LM55:
+ 547 01fe 0C94 0000 		jmp message_transmit_handler
+ 549               	.Lscope7:
+ 555               	.global	prepareMsg
+ 557               	prepareMsg:
+ 164:messages.c    **** 
+ 165:messages.c    **** /**
+ 166:messages.c    ****  * Generate CAN-Message
+ 167:messages.c    ****  *
+ 168:messages.c    ****  * \param cmd The ReKick command
+ 169:messages.c    ****  * \param data A uint8_t array which holds the message.
+ 170:messages.c    ****  * \param length The length of the message
+ 171:messages.c    ****  * \param priority The priority (PRIORITY_LOW, _NORM, _HIGH) of the message
+ 172:messages.c    ****  */
+ 173:messages.c    **** int8_t prepareMsg(uint8_t cmd, uint8_t* data, uint8_t length, uint8_t priority)
+ 174:messages.c    **** {
+ 559               	.LM56:
+ 560               	.LFBB8:
+ 561 0202 FF92      		push r15
+ 562 0204 0F93      		push r16
+ 563 0206 1F93      		push r17
+ 564 0208 CF93      		push r28
+ 565 020a DF93      		push r29
+ 566 020c CDB7      		in r28,__SP_L__
+ 567 020e DEB7      		in r29,__SP_H__
+ 568 0210 6297      		sbiw r28,18
+ 569 0212 0FB6      		in __tmp_reg__,__SREG__
+ 570 0214 F894      		cli
+ 571 0216 DEBF      		out __SP_H__,r29
+ 572 0218 0FBE      		out __SREG__,__tmp_reg__
+ 573 021a CDBF      		out __SP_L__,r28
+ 574               	/* prologue: function */
+ 575               	/* frame size = 18 */
+ 576               	/* stack size = 23 */
+ 577               	.L__stack_usage = 23
+ 578 021c F82E      		mov r15,r24
+ 579 021e 8B01      		movw r16,r22
+ 175:messages.c    **** 	tExtendedCAN message;
+ 176:messages.c    **** 
+ 177:messages.c    **** 	// 0x00, priority, sender, receiver
+ 178:messages.c    **** 	uint8_t id[4] = {0x00, priority, REKICK_ID, ETH2CAN_ID};
+ 581               	.LM57:
+ 582 0220 1E86      		std Y+14,__zero_reg__
+ 583 0222 2F87      		std Y+15,r18
+ 584 0224 80E6      		ldi r24,lo8(96)
+ 585 0226 888B      		std Y+16,r24
+ 586 0228 198A      		std Y+17,__zero_reg__
+ 179:messages.c    **** 	generate_extCAN_ID(id, &message.id);
+ 588               	.LM58:
+ 589 022a BE01      		movw r22,r28
+ 590 022c 6F5F      		subi r22,-1
+ 591 022e 7F4F      		sbci r23,-1
+ 592 0230 CE01      		movw r24,r28
+ 593 0232 0E96      		adiw r24,14
+ 594 0234 4A8B      		std Y+18,r20
+ 595 0236 0E94 0000 		call generate_extCAN_ID
+ 596 023a 4A89      		ldd r20,Y+18
+ 597 023c 4830      		cpi r20,lo8(8)
+ 598 023e 00F0      		brlo .L33
+ 599 0240 47E0      		ldi r20,lo8(7)
+ 600               	.L33:
+ 180:messages.c    **** 
+ 181:messages.c    **** 	if (length > 7)
+ 182:messages.c    **** 		length = 7;
+ 183:messages.c    **** 	message.length = length + 1;
+ 602               	.LM59:
+ 603 0242 81E0      		ldi r24,lo8(1)
+ 604 0244 840F      		add r24,r20
+ 605 0246 8D87      		std Y+13,r24
+ 184:messages.c    **** 
+ 185:messages.c    **** 	message.data[0] = cmd;
+ 607               	.LM60:
+ 608 0248 FD82      		std Y+5,r15
+ 186:messages.c    **** 	memcpy(message.data+1, data, length);
+ 610               	.LM61:
+ 611 024a 50E0      		ldi r21,0
+ 612 024c B801      		movw r22,r16
+ 613 024e CE01      		movw r24,r28
+ 614 0250 0696      		adiw r24,6
+ 615 0252 0E94 0000 		call memcpy
+ 187:messages.c    **** 
+ 188:messages.c    **** 	can_buffer[can_buffer_head] = message;
+ 617               	.LM62:
+ 618 0256 8091 0000 		lds r24,can_buffer_head
+ 619 025a 9DE0      		ldi r25,lo8(13)
+ 620 025c 989F      		mul r25,r24
+ 621 025e D001      		movw r26,r0
+ 622 0260 1124      		clr __zero_reg__
+ 623 0262 A050      		subi r26,lo8(-(can_buffer))
+ 624 0264 B040      		sbci r27,hi8(-(can_buffer))
+ 625 0266 FE01      		movw r30,r28
+ 626 0268 3196      		adiw r30,1
+ 627               		0:
+ 628 026a 0190      		ld r0,Z+
+ 629 026c 0D92      		st X+,r0
+ 630 026e 9A95      		dec r25
+ 631 0270 01F4      		brne 0b
+ 189:messages.c    **** 
+ 190:messages.c    **** 	if (++can_buffer_head == CAN_MSG_BUFFER_LENGTH)
+ 633               	.LM63:
+ 634 0272 8F5F      		subi r24,lo8(-(1))
+ 635 0274 8431      		cpi r24,lo8(20)
+ 636 0276 01F0      		breq .L34
+ 637 0278 8093 0000 		sts can_buffer_head,r24
+ 638 027c 00C0      		rjmp .L35
+ 639               	.L34:
+ 191:messages.c    **** 		can_buffer_head = 0;
+ 641               	.LM64:
+ 642 027e 1092 0000 		sts can_buffer_head,__zero_reg__
+ 643               	.L35:
+ 192:messages.c    **** 
+ 193:messages.c    **** 	// check for buffer overflow.
+ 194:messages.c    **** 	if (can_buffer_head == can_buffer_tail) {
+ 645               	.LM65:
+ 646 0282 8091 0000 		lds r24,can_buffer_head
+ 647 0286 9091 0000 		lds r25,can_buffer_tail
+ 648 028a 8913      		cpse r24,r25
+ 649 028c 00C0      		rjmp .L37
+ 195:messages.c    **** 		// overwrite existing data
+ 196:messages.c    **** 		if (++can_buffer_tail == CAN_MSG_BUFFER_LENGTH)
+ 651               	.LM66:
+ 652 028e 8F5F      		subi r24,lo8(-(1))
+ 653 0290 8431      		cpi r24,lo8(20)
+ 654 0292 01F0      		breq .L38
+ 655 0294 8093 0000 		sts can_buffer_tail,r24
+ 656 0298 00C0      		rjmp .L37
+ 657               	.L38:
+ 197:messages.c    **** 			can_buffer_tail = 0;
+ 659               	.LM67:
+ 660 029a 1092 0000 		sts can_buffer_tail,__zero_reg__
+ 661               	.L37:
+ 198:messages.c    **** 	}
+ 199:messages.c    **** 
+ 200:messages.c    **** 	return 1;
+ 201:messages.c    **** }
+ 663               	.LM68:
+ 664 029e 81E0      		ldi r24,lo8(1)
+ 665               	/* epilogue start */
+ 666 02a0 6296      		adiw r28,18
+ 667 02a2 0FB6      		in __tmp_reg__,__SREG__
+ 668 02a4 F894      		cli
+ 669 02a6 DEBF      		out __SP_H__,r29
+ 670 02a8 0FBE      		out __SREG__,__tmp_reg__
+ 671 02aa CDBF      		out __SP_L__,r28
+ 672 02ac DF91      		pop r29
+ 673 02ae CF91      		pop r28
+ 674 02b0 1F91      		pop r17
+ 675 02b2 0F91      		pop r16
+ 676 02b4 FF90      		pop r15
+ 677 02b6 0895      		ret
+ 683               	.Lscope8:
+ 687               	.global	split_message
+ 689               	split_message:
+ 202:messages.c    **** 
+ 203:messages.c    **** /**
+ 204:messages.c    ****  * Split message into one or more messages.
+ 205:messages.c    ****  *
+ 206:messages.c    ****  * Splits the message therfor it fits into 8 bytes (limit of CAN data)
+ 207:messages.c    ****  *
+ 208:messages.c    ****  * \param cmd The ReKick command
+ 209:messages.c    ****  * \param A NULL terminated string
+ 210:messages.c    ****  */
+ 211:messages.c    **** void split_message(uint8_t cmd, char *str) {
+ 691               	.LM69:
+ 692               	.LFBB9:
+ 693 02b8 BF92      		push r11
+ 694 02ba CF92      		push r12
+ 695 02bc DF92      		push r13
+ 696 02be EF92      		push r14
+ 697 02c0 FF92      		push r15
+ 698 02c2 0F93      		push r16
+ 699 02c4 1F93      		push r17
+ 700 02c6 CF93      		push r28
+ 701 02c8 DF93      		push r29
+ 702               	/* prologue: function */
+ 703               	/* frame size = 0 */
+ 704               	/* stack size = 9 */
+ 705               	.L__stack_usage = 9
+ 706 02ca 082F      		mov r16,r24
+ 707 02cc 7B01      		movw r14,r22
+ 212:messages.c    **** 
+ 213:messages.c    **** 	uint8_t len = strlen(str);
+ 709               	.LM70:
+ 710 02ce EB01      		movw r28,r22
+ 711               		0:
+ 712 02d0 0990      		ld __tmp_reg__,Y+
+ 713 02d2 0020      		tst __tmp_reg__
+ 714 02d4 01F4      		brne 0b
+ 715 02d6 2197      		sbiw r28,1
+ 716 02d8 C61B      		sub r28,r22
+ 717 02da D70B      		sbc r29,r23
+ 718 02dc BC2E      		mov r11,r28
+ 214:messages.c    **** 	uint8_t i;
+ 215:messages.c    **** 
+ 216:messages.c    **** 	for (i = 0; i < len;) {
+ 720               	.LM71:
+ 721 02de 10E0      		ldi r17,0
+ 722 02e0 6E01      		movw r12,r28
+ 723 02e2 DD24      		clr r13
+ 724               	.L41:
+ 726               	.LM72:
+ 727 02e4 1B15      		cp r17,r11
+ 728 02e6 00F4      		brsh .L46
+ 217:messages.c    **** 		if (len-i > 7) {
+ 730               	.LM73:
+ 731 02e8 212F      		mov r18,r17
+ 732 02ea 30E0      		ldi r19,0
+ 733 02ec C601      		movw r24,r12
+ 734 02ee 821B      		sub r24,r18
+ 735 02f0 930B      		sbc r25,r19
+ 736 02f2 B701      		movw r22,r14
+ 737 02f4 620F      		add r22,r18
+ 738 02f6 731F      		adc r23,r19
+ 218:messages.c    **** 			prepareMsg(cmd, ((uint8_t*)str) + i, 7, PRIORITY_NORM);
+ 740               	.LM74:
+ 741 02f8 20E4      		ldi r18,lo8(64)
+ 217:messages.c    **** 		if (len-i > 7) {
+ 743               	.LM75:
+ 744 02fa 0897      		sbiw r24,8
+ 745 02fc 04F0      		brlt .L42
+ 747               	.LM76:
+ 748 02fe 47E0      		ldi r20,lo8(7)
+ 749 0300 00C0      		rjmp .L45
+ 750               	.L42:
+ 219:messages.c    **** 		}
+ 220:messages.c    **** 		else {
+ 221:messages.c    **** 			prepareMsg(cmd, ((uint8_t*)str) + i, len-i, PRIORITY_NORM);
+ 752               	.LM77:
+ 753 0302 4C2F      		mov r20,r28
+ 754 0304 411B      		sub r20,r17
+ 755               	.L45:
+ 756 0306 802F      		mov r24,r16
+ 757 0308 0E94 0000 		call prepareMsg
+ 222:messages.c    **** 		}
+ 223:messages.c    **** 
+ 224:messages.c    **** 		i += 7;
+ 759               	.LM78:
+ 760 030c 195F      		subi r17,lo8(-(7))
+ 761 030e 00C0      		rjmp .L41
+ 762               	.L46:
+ 763               	/* epilogue start */
+ 225:messages.c    **** 	}
+ 226:messages.c    **** 
+ 227:messages.c    **** 	return;
+ 228:messages.c    **** }
+ 765               	.LM79:
+ 766 0310 DF91      		pop r29
+ 767 0312 CF91      		pop r28
+ 768 0314 1F91      		pop r17
+ 769 0316 0F91      		pop r16
+ 770 0318 FF90      		pop r15
+ 771 031a EF90      		pop r14
+ 772 031c DF90      		pop r13
+ 773 031e CF90      		pop r12
+ 774 0320 BF90      		pop r11
+ 775 0322 0895      		ret
+ 781               	.Lscope9:
+ 784               	.global	debug
+ 786               	debug:
+ 229:messages.c    **** 
+ 230:messages.c    **** /**
+ 231:messages.c    ****  * Sends a debug message to the ReKick Driver
+ 232:messages.c    ****  *
+ 233:messages.c    ****  * \see \ref warning
+ 234:messages.c    ****  * \see \ref error
+ 235:messages.c    ****  *
+ 236:messages.c    ****  * \param str A NULL terminated string
+ 237:messages.c    ****  */
+ 238:messages.c    **** void debug(char *str) {
+ 788               	.LM80:
+ 789               	.LFBB10:
+ 790 0324 CF92      		push r12
+ 791 0326 DF92      		push r13
+ 792 0328 EF92      		push r14
+ 793 032a FF92      		push r15
+ 794 032c 0F93      		push r16
+ 795 032e 1F93      		push r17
+ 796 0330 CF93      		push r28
+ 797 0332 DF93      		push r29
+ 798 0334 CDB7      		in r28,__SP_L__
+ 799 0336 DEB7      		in r29,__SP_H__
+ 800               	/* prologue: function */
+ 801               	/* frame size = 0 */
+ 802               	/* stack size = 8 */
+ 803               	.L__stack_usage = 8
+ 804 0338 BC01      		movw r22,r24
+ 239:messages.c    **** 
+ 240:messages.c    **** 	uint8_t len = strlen(str);
+ 241:messages.c    **** 
+ 242:messages.c    **** 	if (str[len-1] != '\n') {
+ 243:messages.c    **** 		char newstr[len+2];
+ 244:messages.c    **** 		memcpy(newstr, str, len);
+ 245:messages.c    **** 		newstr[len] = '\n';
+ 246:messages.c    **** 		newstr[len+1] = 0x00;
+ 247:messages.c    **** 		split_message(CMD_MSG, newstr);
+ 248:messages.c    **** 	}
+ 249:messages.c    **** 	else {
+ 250:messages.c    **** 		split_message(CMD_MSG, str);
+ 251:messages.c    **** 	}
+ 252:messages.c    **** 
+ 253:messages.c    **** 	return;
+ 254:messages.c    **** }
+ 806               	.LM81:
+ 807 033a EDB6      		in r14,__SP_L__
+ 808 033c FEB6      		in r15,__SP_H__
+ 240:messages.c    **** 
+ 810               	.LM82:
+ 811 033e FC01      		movw r30,r24
+ 812               		0:
+ 813 0340 0190      		ld __tmp_reg__,Z+
+ 814 0342 0020      		tst __tmp_reg__
+ 815 0344 01F4      		brne 0b
+ 816 0346 3197      		sbiw r30,1
+ 817 0348 8F01      		movw r16,r30
+ 818 034a 081B      		sub r16,r24
+ 819 034c 190B      		sbc r17,r25
+ 242:messages.c    **** 		char newstr[len+2];
+ 821               	.LM83:
+ 822 034e 1127      		clr r17
+ 823 0350 FC01      		movw r30,r24
+ 824 0352 E00F      		add r30,r16
+ 825 0354 F11F      		adc r31,r17
+ 826 0356 3197      		sbiw r30,1
+ 827 0358 8081      		ld r24,Z
+ 828 035a 8A30      		cpi r24,lo8(10)
+ 829 035c 01F0      		breq .L48
+ 830               	.LBB9:
+ 243:messages.c    **** 		memcpy(newstr, str, len);
+ 832               	.LM84:
+ 833 035e C801      		movw r24,r16
+ 834 0360 0296      		adiw r24,2
+ 835 0362 2DB7      		in r18,__SP_L__
+ 836 0364 3EB7      		in r19,__SP_H__
+ 837 0366 281B      		sub r18,r24
+ 838 0368 390B      		sbc r19,r25
+ 839 036a 0FB6      		in __tmp_reg__,__SREG__
+ 840 036c F894      		cli
+ 841 036e 3EBF      		out __SP_H__,r19
+ 842 0370 0FBE      		out __SREG__,__tmp_reg__
+ 843 0372 2DBF      		out __SP_L__,r18
+ 844 0374 8DB7      		in r24,__SP_L__
+ 845 0376 9EB7      		in r25,__SP_H__
+ 846 0378 0196      		adiw r24,1
+ 847 037a 6C01      		movw r12,r24
+ 244:messages.c    **** 		newstr[len] = '\n';
+ 849               	.LM85:
+ 850 037c A801      		movw r20,r16
+ 851 037e 0E94 0000 		call memcpy
+ 245:messages.c    **** 		newstr[len+1] = 0x00;
+ 853               	.LM86:
+ 854 0382 F601      		movw r30,r12
+ 855 0384 E00F      		add r30,r16
+ 856 0386 F11F      		adc r31,r17
+ 857 0388 8AE0      		ldi r24,lo8(10)
+ 858 038a 8083      		st Z,r24
+ 246:messages.c    **** 		split_message(CMD_MSG, newstr);
+ 860               	.LM87:
+ 861 038c 1182      		std Z+1,__zero_reg__
+ 247:messages.c    **** 	}
+ 863               	.LM88:
+ 864 038e B601      		movw r22,r12
+ 865 0390 8EE3      		ldi r24,lo8(62)
+ 866 0392 0E94 0000 		call split_message
+ 867 0396 0FB6      		in __tmp_reg__,__SREG__
+ 868 0398 F894      		cli
+ 869 039a FEBE      		out __SP_H__,r15
+ 870 039c 0FBE      		out __SREG__,__tmp_reg__
+ 871 039e EDBE      		out __SP_L__,r14
+ 872               	/* epilogue start */
+ 873               	.LBE9:
+ 875               	.LM89:
+ 876 03a0 DF91      		pop r29
+ 877 03a2 CF91      		pop r28
+ 878 03a4 1F91      		pop r17
+ 879 03a6 0F91      		pop r16
+ 880 03a8 FF90      		pop r15
+ 881 03aa EF90      		pop r14
+ 882 03ac DF90      		pop r13
+ 883 03ae CF90      		pop r12
+ 884 03b0 0895      		ret
+ 885               	.L48:
+ 250:messages.c    **** 	}
+ 887               	.LM90:
+ 888 03b2 8EE3      		ldi r24,lo8(62)
+ 889               	/* epilogue start */
+ 891               	.LM91:
+ 892 03b4 DF91      		pop r29
+ 893 03b6 CF91      		pop r28
+ 894 03b8 1F91      		pop r17
+ 895 03ba 0F91      		pop r16
+ 896 03bc FF90      		pop r15
+ 897 03be EF90      		pop r14
+ 898 03c0 DF90      		pop r13
+ 899 03c2 CF90      		pop r12
+ 250:messages.c    **** 	}
+ 901               	.LM92:
+ 902 03c4 0C94 0000 		jmp split_message
+ 904               	.Lscope10:
+ 907               	.global	warning
+ 909               	warning:
+ 255:messages.c    **** 
+ 256:messages.c    **** /**
+ 257:messages.c    ****  * Sends a error message to the ReKick Driver
+ 258:messages.c    ****  *
+ 259:messages.c    ****  * \see \ref debug
+ 260:messages.c    ****  * \see \ref error
+ 261:messages.c    ****  *
+ 262:messages.c    ****  * \param str A NULL terminated string
+ 263:messages.c    ****  */
+ 264:messages.c    **** void warning(char *str) {
+ 911               	.LM93:
+ 912               	.LFBB11:
+ 913 03c8 CF92      		push r12
+ 914 03ca DF92      		push r13
+ 915 03cc EF92      		push r14
+ 916 03ce FF92      		push r15
+ 917 03d0 0F93      		push r16
+ 918 03d2 1F93      		push r17
+ 919 03d4 CF93      		push r28
+ 920 03d6 DF93      		push r29
+ 921 03d8 CDB7      		in r28,__SP_L__
+ 922 03da DEB7      		in r29,__SP_H__
+ 923               	/* prologue: function */
+ 924               	/* frame size = 0 */
+ 925               	/* stack size = 8 */
+ 926               	.L__stack_usage = 8
+ 927 03dc BC01      		movw r22,r24
+ 265:messages.c    **** 
+ 266:messages.c    **** 	uint8_t len = strlen(str);
+ 267:messages.c    **** 
+ 268:messages.c    **** 	if (str[len-1] != '\n') {
+ 269:messages.c    **** 		char newstr[len+2];
+ 270:messages.c    **** 		memcpy(newstr, str, len);
+ 271:messages.c    **** 		newstr[len] = '\n';
+ 272:messages.c    **** 		newstr[len+1] = 0x00;
+ 273:messages.c    **** 		split_message(CMD_WARNING, newstr);
+ 274:messages.c    **** 	}
+ 275:messages.c    **** 	else {
+ 276:messages.c    **** 		split_message(CMD_WARNING, str);
+ 277:messages.c    **** 	}
+ 278:messages.c    **** 
+ 279:messages.c    **** 	return;
+ 280:messages.c    **** }
+ 929               	.LM94:
+ 930 03de EDB6      		in r14,__SP_L__
+ 931 03e0 FEB6      		in r15,__SP_H__
+ 266:messages.c    **** 
+ 933               	.LM95:
+ 934 03e2 FC01      		movw r30,r24
+ 935               		0:
+ 936 03e4 0190      		ld __tmp_reg__,Z+
+ 937 03e6 0020      		tst __tmp_reg__
+ 938 03e8 01F4      		brne 0b
+ 939 03ea 3197      		sbiw r30,1
+ 940 03ec 8F01      		movw r16,r30
+ 941 03ee 081B      		sub r16,r24
+ 942 03f0 190B      		sbc r17,r25
+ 268:messages.c    **** 		char newstr[len+2];
+ 944               	.LM96:
+ 945 03f2 1127      		clr r17
+ 946 03f4 FC01      		movw r30,r24
+ 947 03f6 E00F      		add r30,r16
+ 948 03f8 F11F      		adc r31,r17
+ 949 03fa 3197      		sbiw r30,1
+ 950 03fc 8081      		ld r24,Z
+ 951 03fe 8A30      		cpi r24,lo8(10)
+ 952 0400 01F0      		breq .L52
+ 953               	.LBB10:
+ 269:messages.c    **** 		memcpy(newstr, str, len);
+ 955               	.LM97:
+ 956 0402 C801      		movw r24,r16
+ 957 0404 0296      		adiw r24,2
+ 958 0406 2DB7      		in r18,__SP_L__
+ 959 0408 3EB7      		in r19,__SP_H__
+ 960 040a 281B      		sub r18,r24
+ 961 040c 390B      		sbc r19,r25
+ 962 040e 0FB6      		in __tmp_reg__,__SREG__
+ 963 0410 F894      		cli
+ 964 0412 3EBF      		out __SP_H__,r19
+ 965 0414 0FBE      		out __SREG__,__tmp_reg__
+ 966 0416 2DBF      		out __SP_L__,r18
+ 967 0418 8DB7      		in r24,__SP_L__
+ 968 041a 9EB7      		in r25,__SP_H__
+ 969 041c 0196      		adiw r24,1
+ 970 041e 6C01      		movw r12,r24
+ 270:messages.c    **** 		newstr[len] = '\n';
+ 972               	.LM98:
+ 973 0420 A801      		movw r20,r16
+ 974 0422 0E94 0000 		call memcpy
+ 271:messages.c    **** 		newstr[len+1] = 0x00;
+ 976               	.LM99:
+ 977 0426 F601      		movw r30,r12
+ 978 0428 E00F      		add r30,r16
+ 979 042a F11F      		adc r31,r17
+ 980 042c 8AE0      		ldi r24,lo8(10)
+ 981 042e 8083      		st Z,r24
+ 272:messages.c    **** 		split_message(CMD_WARNING, newstr);
+ 983               	.LM100:
+ 984 0430 1182      		std Z+1,__zero_reg__
+ 273:messages.c    **** 	}
+ 986               	.LM101:
+ 987 0432 B601      		movw r22,r12
+ 988 0434 82E2      		ldi r24,lo8(34)
+ 989 0436 0E94 0000 		call split_message
+ 990 043a 0FB6      		in __tmp_reg__,__SREG__
+ 991 043c F894      		cli
+ 992 043e FEBE      		out __SP_H__,r15
+ 993 0440 0FBE      		out __SREG__,__tmp_reg__
+ 994 0442 EDBE      		out __SP_L__,r14
+ 995               	/* epilogue start */
+ 996               	.LBE10:
+ 998               	.LM102:
+ 999 0444 DF91      		pop r29
+ 1000 0446 CF91      		pop r28
+ 1001 0448 1F91      		pop r17
+ 1002 044a 0F91      		pop r16
+ 1003 044c FF90      		pop r15
+ 1004 044e EF90      		pop r14
+ 1005 0450 DF90      		pop r13
+ 1006 0452 CF90      		pop r12
+ 1007 0454 0895      		ret
+ 1008               	.L52:
+ 276:messages.c    **** 	}
+ 1010               	.LM103:
+ 1011 0456 82E2      		ldi r24,lo8(34)
+ 1012               	/* epilogue start */
+ 1014               	.LM104:
+ 1015 0458 DF91      		pop r29
+ 1016 045a CF91      		pop r28
+ 1017 045c 1F91      		pop r17
+ 1018 045e 0F91      		pop r16
+ 1019 0460 FF90      		pop r15
+ 1020 0462 EF90      		pop r14
+ 1021 0464 DF90      		pop r13
+ 1022 0466 CF90      		pop r12
+ 276:messages.c    **** 	}
+ 1024               	.LM105:
+ 1025 0468 0C94 0000 		jmp split_message
+ 1027               	.Lscope11:
+ 1030               	.global	error
+ 1032               	error:
+ 281:messages.c    **** 
+ 282:messages.c    **** /**
+ 283:messages.c    ****  * Sends a error message to the ReKick Driver
+ 284:messages.c    ****  *
+ 285:messages.c    ****  * \see \ref debug
+ 286:messages.c    ****  * \see \ref warning
+ 287:messages.c    ****  *
+ 288:messages.c    ****  * \param str A NULL terminated string
+ 289:messages.c    ****  */
+ 290:messages.c    **** void error(char *str) {
+ 1034               	.LM106:
+ 1035               	.LFBB12:
+ 1036 046c CF92      		push r12
+ 1037 046e DF92      		push r13
+ 1038 0470 EF92      		push r14
+ 1039 0472 FF92      		push r15
+ 1040 0474 0F93      		push r16
+ 1041 0476 1F93      		push r17
+ 1042 0478 CF93      		push r28
+ 1043 047a DF93      		push r29
+ 1044 047c CDB7      		in r28,__SP_L__
+ 1045 047e DEB7      		in r29,__SP_H__
+ 1046               	/* prologue: function */
+ 1047               	/* frame size = 0 */
+ 1048               	/* stack size = 8 */
+ 1049               	.L__stack_usage = 8
+ 1050 0480 BC01      		movw r22,r24
+ 291:messages.c    **** 
+ 292:messages.c    **** 	uint8_t len = strlen(str);
+ 293:messages.c    **** 
+ 294:messages.c    **** 	if (str[len-1] != '\n') {
+ 295:messages.c    **** 		char newstr[len+2];
+ 296:messages.c    **** 		memcpy(newstr, str, len);
+ 297:messages.c    **** 		newstr[len] = '\n';
+ 298:messages.c    **** 		newstr[len+1] = 0x00;
+ 299:messages.c    **** 		split_message(CMD_ERROR, newstr);
+ 300:messages.c    **** 	}
+ 301:messages.c    **** 	else {
+ 302:messages.c    **** 		split_message(CMD_ERROR, str);
+ 303:messages.c    **** 	}
+ 304:messages.c    **** 
+ 305:messages.c    **** 	return;
+ 306:messages.c    **** }
+ 1052               	.LM107:
+ 1053 0482 EDB6      		in r14,__SP_L__
+ 1054 0484 FEB6      		in r15,__SP_H__
+ 292:messages.c    **** 
+ 1056               	.LM108:
+ 1057 0486 FC01      		movw r30,r24
+ 1058               		0:
+ 1059 0488 0190      		ld __tmp_reg__,Z+
+ 1060 048a 0020      		tst __tmp_reg__
+ 1061 048c 01F4      		brne 0b
+ 1062 048e 3197      		sbiw r30,1
+ 1063 0490 8F01      		movw r16,r30
+ 1064 0492 081B      		sub r16,r24
+ 1065 0494 190B      		sbc r17,r25
+ 294:messages.c    **** 		char newstr[len+2];
+ 1067               	.LM109:
+ 1068 0496 1127      		clr r17
+ 1069 0498 FC01      		movw r30,r24
+ 1070 049a E00F      		add r30,r16
+ 1071 049c F11F      		adc r31,r17
+ 1072 049e 3197      		sbiw r30,1
+ 1073 04a0 8081      		ld r24,Z
+ 1074 04a2 8A30      		cpi r24,lo8(10)
+ 1075 04a4 01F0      		breq .L56
+ 1076               	.LBB11:
+ 295:messages.c    **** 		memcpy(newstr, str, len);
+ 1078               	.LM110:
+ 1079 04a6 C801      		movw r24,r16
+ 1080 04a8 0296      		adiw r24,2
+ 1081 04aa 2DB7      		in r18,__SP_L__
+ 1082 04ac 3EB7      		in r19,__SP_H__
+ 1083 04ae 281B      		sub r18,r24
+ 1084 04b0 390B      		sbc r19,r25
+ 1085 04b2 0FB6      		in __tmp_reg__,__SREG__
+ 1086 04b4 F894      		cli
+ 1087 04b6 3EBF      		out __SP_H__,r19
+ 1088 04b8 0FBE      		out __SREG__,__tmp_reg__
+ 1089 04ba 2DBF      		out __SP_L__,r18
+ 1090 04bc 8DB7      		in r24,__SP_L__
+ 1091 04be 9EB7      		in r25,__SP_H__
+ 1092 04c0 0196      		adiw r24,1
+ 1093 04c2 6C01      		movw r12,r24
+ 296:messages.c    **** 		newstr[len] = '\n';
+ 1095               	.LM111:
+ 1096 04c4 A801      		movw r20,r16
+ 1097 04c6 0E94 0000 		call memcpy
+ 297:messages.c    **** 		newstr[len+1] = 0x00;
+ 1099               	.LM112:
+ 1100 04ca F601      		movw r30,r12
+ 1101 04cc E00F      		add r30,r16
+ 1102 04ce F11F      		adc r31,r17
+ 1103 04d0 8AE0      		ldi r24,lo8(10)
+ 1104 04d2 8083      		st Z,r24
+ 298:messages.c    **** 		split_message(CMD_ERROR, newstr);
+ 1106               	.LM113:
+ 1107 04d4 1182      		std Z+1,__zero_reg__
+ 299:messages.c    **** 	}
+ 1109               	.LM114:
+ 1110 04d6 B601      		movw r22,r12
+ 1111 04d8 81E2      		ldi r24,lo8(33)
+ 1112 04da 0E94 0000 		call split_message
+ 1113 04de 0FB6      		in __tmp_reg__,__SREG__
+ 1114 04e0 F894      		cli
+ 1115 04e2 FEBE      		out __SP_H__,r15
+ 1116 04e4 0FBE      		out __SREG__,__tmp_reg__
+ 1117 04e6 EDBE      		out __SP_L__,r14
+ 1118               	/* epilogue start */
+ 1119               	.LBE11:
+ 1121               	.LM115:
+ 1122 04e8 DF91      		pop r29
+ 1123 04ea CF91      		pop r28
+ 1124 04ec 1F91      		pop r17
+ 1125 04ee 0F91      		pop r16
+ 1126 04f0 FF90      		pop r15
+ 1127 04f2 EF90      		pop r14
+ 1128 04f4 DF90      		pop r13
+ 1129 04f6 CF90      		pop r12
+ 1130 04f8 0895      		ret
+ 1131               	.L56:
+ 302:messages.c    **** 	}
+ 1133               	.LM116:
+ 1134 04fa 81E2      		ldi r24,lo8(33)
+ 1135               	/* epilogue start */
+ 1137               	.LM117:
+ 1138 04fc DF91      		pop r29
+ 1139 04fe CF91      		pop r28
+ 1140 0500 1F91      		pop r17
+ 1141 0502 0F91      		pop r16
+ 1142 0504 FF90      		pop r15
+ 1143 0506 EF90      		pop r14
+ 1144 0508 DF90      		pop r13
+ 1145 050a CF90      		pop r12
+ 302:messages.c    **** 	}
+ 1147               	.LM118:
+ 1148 050c 0C94 0000 		jmp split_message
+ 1150               	.Lscope12:
+ 1151               		.section	.rodata.str1.1,"aMS",@progbits,1
+ 1152               	.LC1:
+ 1153 0000 7625 752E 		.string	"v%u.%u"
+ 1153      2575 00
+ 1154               	.LC2:
+ 1155 0007 6D61 6E75 		.string	"manual"
+ 1155      616C 00
+ 1156               	.LC3:
+ 1157 000e 436F 6D6D 		.string	"Command not implemented"
+ 1157      616E 6420 
+ 1157      6E6F 7420 
+ 1157      696D 706C 
+ 1157      656D 656E 
+ 1158               		.section	.rodata
+ 1159               	.LC0:
+ 1160 0000 01        		.byte	1
+ 1161 0001 02        		.byte	2
+ 1162 0002 03        		.byte	3
+ 1163 0003 04        		.byte	4
+ 1164 0004 05        		.byte	5
+ 1165               		.text
+ 1169               	.global	parse_default
+ 1171               	parse_default:
+ 307:messages.c    **** 
+ 308:messages.c    **** /**
+ 309:messages.c    ****  * Parser function for the default state.
+ 310:messages.c    ****  *
+ 311:messages.c    ****  * This is the parser for the normal operation.
+ 312:messages.c    ****  *
+ 313:messages.c    ****  * \param data The data of the received message
+ 314:messages.c    ****  * \param length The length of the received message
+ 315:messages.c    ****  */
+ 316:messages.c    **** void parse_default(uint8_t *data, uint8_t length) {
+ 1173               	.LM119:
+ 1174               	.LFBB13:
+ 1175 0510 0F93      		push r16
+ 1176 0512 1F93      		push r17
+ 1177 0514 CF93      		push r28
+ 1178 0516 DF93      		push r29
+ 1179 0518 CDB7      		in r28,__SP_L__
+ 1180 051a DEB7      		in r29,__SP_H__
+ 1181 051c 2E97      		sbiw r28,14
+ 1182 051e 0FB6      		in __tmp_reg__,__SREG__
+ 1183 0520 F894      		cli
+ 1184 0522 DEBF      		out __SP_H__,r29
+ 1185 0524 0FBE      		out __SREG__,__tmp_reg__
+ 1186 0526 CDBF      		out __SP_L__,r28
+ 1187               	/* prologue: function */
+ 1188               	/* frame size = 14 */
+ 1189               	/* stack size = 18 */
+ 1190               	.L__stack_usage = 18
+ 1191 0528 9C01      		movw r18,r24
+ 317:messages.c    **** 
+ 318:messages.c    **** 	volatile uint16_t tmpa = 0;
+ 1193               	.LM120:
+ 1194 052a 1E86      		std Y+14,__zero_reg__
+ 1195 052c 1D86      		std Y+13,__zero_reg__
+ 319:messages.c    **** 	uint8_t placeholder[5] = {1, 2, 3, 4, 5};
+ 1197               	.LM121:
+ 1198 052e 85E0      		ldi r24,lo8(5)
+ 1199 0530 E0E0      		ldi r30,lo8(.LC0)
+ 1200 0532 F0E0      		ldi r31,hi8(.LC0)
+ 1201 0534 DE01      		movw r26,r28
+ 1202 0536 1896      		adiw r26,8
+ 1203               		0:
+ 1204 0538 0190      		ld r0,Z+
+ 1205 053a 0D92      		st X+,r0
+ 1206 053c 8A95      		dec r24
+ 1207 053e 01F4      		brne 0b
+ 320:messages.c    **** 
+ 321:messages.c    **** 	switch (data[0]) {
+ 1209               	.LM122:
+ 1210 0540 F901      		movw r30,r18
+ 1211 0542 9081      		ld r25,Z
+ 1212 0544 9033      		cpi r25,lo8(48)
+ 1213 0546 01F4      		brne .+2
+ 1214 0548 00C0      		rjmp .L59
+ 1215 054a 00F4      		brsh .L62
+ 1216 054c 9230      		cpi r25,lo8(2)
+ 1217 054e 01F4      		brne .+2
+ 1218 0550 00C0      		rjmp .L59
+ 1219 0552 9330      		cpi r25,lo8(3)
+ 1220 0554 01F0      		breq .L63
+ 1221 0556 9130      		cpi r25,lo8(1)
+ 1222 0558 01F0      		breq .+2
+ 1223 055a 00C0      		rjmp .L60
+ 1224               	.LBB12:
+ 322:messages.c    **** 		case CMD_PING:
+ 323:messages.c    **** 			timer_get_ms(&last_heartbeat);
+ 1226               	.LM123:
+ 1227 055c 80E0      		ldi r24,lo8(last_heartbeat)
+ 1228 055e 90E0      		ldi r25,hi8(last_heartbeat)
+ 1229 0560 0E94 0000 		call timer_get_ms
+ 324:messages.c    **** 			prepareMsg(CMD_PONG, placeholder, 0, PRIORITY_NORM);
+ 1231               	.LM124:
+ 1232 0564 20E4      		ldi r18,lo8(64)
+ 1233 0566 40E0      		ldi r20,0
+ 1234 0568 BE01      		movw r22,r28
+ 1235 056a 685F      		subi r22,-8
+ 1236 056c 7F4F      		sbci r23,-1
+ 1237 056e 81EF      		ldi r24,lo8(-15)
+ 1238 0570 0E94 0000 		call prepareMsg
+ 325:messages.c    **** 			break;
+ 1240               	.LM125:
+ 1241 0574 00C0      		rjmp .L59
+ 1242               	.L62:
+ 1243               	.LBE12:
+ 321:messages.c    **** 		case CMD_PING:
+ 1245               	.LM126:
+ 1246 0576 9034      		cpi r25,lo8(64)
+ 1247 0578 01F4      		brne .+2
+ 1248 057a 00C0      		rjmp .L65
+ 1249 057c 00F4      		brsh .L66
+ 1250 057e 9133      		cpi r25,lo8(49)
+ 1251 0580 01F0      		breq .L67
+ 1252 0582 00C0      		rjmp .L60
+ 1253               	.L66:
+ 1254 0584 9134      		cpi r25,lo8(65)
+ 1255 0586 01F4      		brne .+2
+ 1256 0588 00C0      		rjmp .L68
+ 1257 058a 9D36      		cpi r25,lo8(109)
+ 1258 058c 01F0      		breq .+2
+ 1259 058e 00C0      		rjmp .L60
+ 1260               	.LBB16:
+ 326:messages.c    **** 
+ 327:messages.c    **** 		case CMD_KICK:
+ 328:messages.c    **** 			if (1) {//timer_get_ms() > 1000) {
+ 329:messages.c    **** 				tmpa = data[1] + (data[2] << 8);
+ 330:messages.c    **** 				if (length == 3)
+ 331:messages.c    **** 					kicker_addKickJob(tmpa);
+ 332:messages.c    **** 				else if (length == 4)
+ 333:messages.c    **** 					kicker_addKickJobForced(tmpa, data[3]);
+ 334:messages.c    **** 			}
+ 335:messages.c    **** 			break;
+ 336:messages.c    **** 
+ 337:messages.c    **** 		case CMD_SET_MAX_VOLTAGE:
+ 338:messages.c    **** 			if (length == 3) {
+ 339:messages.c    **** 				tmpa = data[1] + (data[2]<<8);
+ 340:messages.c    **** 				booster_setMaxVoltage((double) tmpa);
+ 341:messages.c    **** 
+ 342:messages.c    **** 			} else if (length == 2) {
+ 343:messages.c    **** 				tmpa = ((uint16_t)(data[1])) & 0xFF;
+ 344:messages.c    **** 				booster_setMaxVoltage((double) tmpa);
+ 345:messages.c    **** 			}
+ 346:messages.c    **** 			break;
+ 347:messages.c    **** 
+ 348:messages.c    **** 		case CMD_GET_VERSION:
+ 349:messages.c    **** 			{
+ 350:messages.c    **** 				char version[7];
+ 351:messages.c    **** 				sprintf(version, "v%u.%u", VERSION_MAJOR, VERSION_MINOR);
+ 352:messages.c    **** 				uint8_t len = strlen(&version);
+ 353:messages.c    **** 				if (len > 7) len = 7;
+ 354:messages.c    **** 				prepareMsg(CMD_VERSION, (uint8_t*) version, len, PRIORITY_NORM);
+ 355:messages.c    **** 			}
+ 356:messages.c    **** 			break;
+ 357:messages.c    **** 
+ 358:messages.c    **** 		case CMD_GET_STATE:
+ 359:messages.c    **** 			booster_sendInfo();
+ 360:messages.c    **** 			break;
+ 361:messages.c    **** 
+ 362:messages.c    **** 		case 'm':
+ 363:messages.c    **** 			debug("manual");
+ 1262               	.LM127:
+ 1263 0590 80E0      		ldi r24,lo8(.LC2)
+ 1264 0592 90E0      		ldi r25,hi8(.LC2)
+ 1265 0594 0E94 0000 		call debug
+ 364:messages.c    **** 			mode = Mode_Manual;
+ 1267               	.LM128:
+ 1268 0598 83E0      		ldi r24,lo8(3)
+ 1269 059a 8093 0000 		sts mode,r24
+ 365:messages.c    **** 			parse_data = parse_manual;
+ 1271               	.LM129:
+ 1272 059e 80E0      		ldi r24,lo8(gs(parse_manual))
+ 1273 05a0 90E0      		ldi r25,hi8(gs(parse_manual))
+ 1274 05a2 9093 0000 		sts parse_data+1,r25
+ 1275 05a6 8093 0000 		sts parse_data,r24
+ 366:messages.c    **** 			break;
+ 1277               	.LM130:
+ 1278 05aa 00C0      		rjmp .L59
+ 1279               	.L63:
+ 329:messages.c    **** 				if (length == 3)
+ 1281               	.LM131:
+ 1282 05ac 2181      		ldd r18,Z+1
+ 1283 05ae 8281      		ldd r24,Z+2
+ 1284 05b0 90E0      		ldi r25,0
+ 1285 05b2 982F      		mov r25,r24
+ 1286 05b4 8827      		clr r24
+ 1287 05b6 820F      		add r24,r18
+ 1288 05b8 911D      		adc r25,__zero_reg__
+ 1289 05ba 9E87      		std Y+14,r25
+ 1290 05bc 8D87      		std Y+13,r24
+ 330:messages.c    **** 					kicker_addKickJob(tmpa);
+ 1292               	.LM132:
+ 1293 05be 6330      		cpi r22,lo8(3)
+ 1294 05c0 01F4      		brne .L70
+ 1295               	.LBB13:
+ 331:messages.c    **** 				else if (length == 4)
+ 1297               	.LM133:
+ 1298 05c2 8D85      		ldd r24,Y+13
+ 1299 05c4 9E85      		ldd r25,Y+14
+ 1300 05c6 0E94 0000 		call kicker_addKickJob
+ 1301               	.LBE13:
+ 1302 05ca 00C0      		rjmp .L59
+ 1303               	.L70:
+ 332:messages.c    **** 					kicker_addKickJobForced(tmpa, data[3]);
+ 1305               	.LM134:
+ 1306 05cc 6430      		cpi r22,lo8(4)
+ 1307 05ce 01F0      		breq .+2
+ 1308 05d0 00C0      		rjmp .L59
+ 1309               	.LBB14:
+ 333:messages.c    **** 			}
+ 1311               	.LM135:
+ 1312 05d2 8D85      		ldd r24,Y+13
+ 1313 05d4 9E85      		ldd r25,Y+14
+ 1314 05d6 6381      		ldd r22,Z+3
+ 1315 05d8 70E0      		ldi r23,0
+ 1316 05da 0E94 0000 		call kicker_addKickJobForced
+ 1317 05de 00C0      		rjmp .L59
+ 1318               	.L67:
+ 1319               	.LBE14:
+ 338:messages.c    **** 				tmpa = data[1] + (data[2]<<8);
+ 1321               	.LM136:
+ 1322 05e0 6330      		cpi r22,lo8(3)
+ 1323 05e2 01F4      		brne .L72
+ 339:messages.c    **** 				booster_setMaxVoltage((double) tmpa);
+ 1325               	.LM137:
+ 1326 05e4 2181      		ldd r18,Z+1
+ 1327 05e6 8281      		ldd r24,Z+2
+ 1328 05e8 90E0      		ldi r25,0
+ 1329 05ea 982F      		mov r25,r24
+ 1330 05ec 8827      		clr r24
+ 1331 05ee 820F      		add r24,r18
+ 1332 05f0 911D      		adc r25,__zero_reg__
+ 1333 05f2 00C0      		rjmp .L81
+ 1334               	.L72:
+ 342:messages.c    **** 				tmpa = ((uint16_t)(data[1])) & 0xFF;
+ 1336               	.LM138:
+ 1337 05f4 6230      		cpi r22,lo8(2)
+ 1338 05f6 01F4      		brne .L59
+ 343:messages.c    **** 				booster_setMaxVoltage((double) tmpa);
+ 1340               	.LM139:
+ 1341 05f8 8181      		ldd r24,Z+1
+ 1342 05fa 90E0      		ldi r25,0
+ 1343               	.L81:
+ 1344 05fc 9E87      		std Y+14,r25
+ 1345 05fe 8D87      		std Y+13,r24
+ 344:messages.c    **** 			}
+ 1347               	.LM140:
+ 1348 0600 8D85      		ldd r24,Y+13
+ 1349 0602 9E85      		ldd r25,Y+14
+ 1350 0604 0E94 0000 		call booster_setMaxVoltage
+ 1351 0608 00C0      		rjmp .L59
+ 1352               	.L68:
+ 1353               	.LBB15:
+ 351:messages.c    **** 				uint8_t len = strlen(&version);
+ 1355               	.LM141:
+ 1356 060a 1F92      		push __zero_reg__
+ 1357 060c 82E0      		ldi r24,lo8(2)
+ 1358 060e 8F93      		push r24
+ 1359 0610 1F92      		push __zero_reg__
+ 1360 0612 1F92      		push __zero_reg__
+ 1361 0614 80E0      		ldi r24,lo8(.LC1)
+ 1362 0616 90E0      		ldi r25,hi8(.LC1)
+ 1363 0618 9F93      		push r25
+ 1364 061a 8F93      		push r24
+ 1365 061c 8E01      		movw r16,r28
+ 1366 061e 0F5F      		subi r16,-1
+ 1367 0620 1F4F      		sbci r17,-1
+ 1368 0622 1F93      		push r17
+ 1369 0624 0F93      		push r16
+ 1370 0626 0E94 0000 		call sprintf
+ 352:messages.c    **** 				if (len > 7) len = 7;
+ 1372               	.LM142:
+ 1373 062a F801      		movw r30,r16
+ 1374               		0:
+ 1375 062c 0190      		ld __tmp_reg__,Z+
+ 1376 062e 0020      		tst __tmp_reg__
+ 1377 0630 01F4      		brne 0b
+ 1378 0632 3197      		sbiw r30,1
+ 1379 0634 4E2F      		mov r20,r30
+ 1380 0636 401B      		sub r20,r16
+ 1381 0638 4830      		cpi r20,lo8(8)
+ 1382 063a 00F0      		brlo .L74
+ 1383 063c 47E0      		ldi r20,lo8(7)
+ 1384               	.L74:
+ 354:messages.c    **** 			}
+ 1386               	.LM143:
+ 1387 063e 20E4      		ldi r18,lo8(64)
+ 1388 0640 B801      		movw r22,r16
+ 1389 0642 83EF      		ldi r24,lo8(-13)
+ 1390 0644 0E94 0000 		call prepareMsg
+ 1391               	.LBE15:
+ 356:messages.c    **** 
+ 1393               	.LM144:
+ 1394 0648 0FB6      		in __tmp_reg__,__SREG__
+ 1395 064a F894      		cli
+ 1396 064c DEBF      		out __SP_H__,r29
+ 1397 064e 0FBE      		out __SREG__,__tmp_reg__
+ 1398 0650 CDBF      		out __SP_L__,r28
+ 1399 0652 00C0      		rjmp .L59
+ 1400               	.L65:
+ 359:messages.c    **** 			break;
+ 1402               	.LM145:
+ 1403 0654 0E94 0000 		call booster_sendInfo
+ 360:messages.c    **** 
+ 1405               	.LM146:
+ 1406 0658 00C0      		rjmp .L59
+ 1407               	.L60:
+ 367:messages.c    **** 
+ 368:messages.c    **** 		case CMD_ROTATE:	// Old Command
+ 369:messages.c    **** 			break;
+ 370:messages.c    **** 
+ 371:messages.c    **** 		case CMD_SET_PULSE_WIDTH:	// Old Command
+ 372:messages.c    **** 			break;
+ 373:messages.c    **** 
+ 374:messages.c    **** 		default:
+ 375:messages.c    **** 			error("Command not implemented");
+ 1409               	.LM147:
+ 1410 065a 80E0      		ldi r24,lo8(.LC3)
+ 1411 065c 90E0      		ldi r25,hi8(.LC3)
+ 1412 065e 0E94 0000 		call error
+ 1413               	.L59:
+ 1414               	/* epilogue start */
+ 1415               	.LBE16:
+ 376:messages.c    **** 			break;
+ 377:messages.c    **** 	}
+ 378:messages.c    **** }
+ 1417               	.LM148:
+ 1418 0662 2E96      		adiw r28,14
+ 1419 0664 0FB6      		in __tmp_reg__,__SREG__
+ 1420 0666 F894      		cli
+ 1421 0668 DEBF      		out __SP_H__,r29
+ 1422 066a 0FBE      		out __SREG__,__tmp_reg__
+ 1423 066c CDBF      		out __SP_L__,r28
+ 1424 066e DF91      		pop r29
+ 1425 0670 CF91      		pop r28
+ 1426 0672 1F91      		pop r17
+ 1427 0674 0F91      		pop r16
+ 1428 0676 0895      		ret
+ 1437               	.Lscope13:
+ 1438               		.section	.rodata.str1.1
+ 1439               	.LC4:
+ 1440 0026 4552 5220 		.string	"ERR DATE"
+ 1440      4441 5445 
+ 1440      00
+ 1441               	.LC5:
+ 1442 002f 4552 5220 		.string	"ERR NAN"
+ 1442      4E41 4E00 
+ 1443               	.LC6:
+ 1444 0037 6E74 2564 		.string	"nt%d\n"
+ 1444      0A00 
+ 1445               	.LC7:
+ 1446 003d 5265 6C65 		.string	"Release"
+ 1446      6173 6500 
+ 1447               	.LC8:
+ 1448 0045 4552 5220 		.string	"ERR IMPL"
+ 1448      494D 504C 
+ 1448      00
+ 1449               		.text
+ 1453               	.global	parse_manual
+ 1455               	parse_manual:
+ 379:messages.c    **** 
+ 380:messages.c    **** /**
+ 381:messages.c    ****  * Parser function for the manual state.
+ 382:messages.c    ****  *
+ 383:messages.c    ****  * This is used in manual mode.
+ 384:messages.c    ****  *
+ 385:messages.c    ****  * \param data The data of the received message
+ 386:messages.c    ****  * \param length The length of the received message
+ 387:messages.c    ****  */
+ 388:messages.c    **** void parse_manual(uint8_t *data, uint8_t length) {
+ 1457               	.LM149:
+ 1458               	.LFBB14:
+ 1459 0678 0F93      		push r16
+ 1460 067a 1F93      		push r17
+ 1461 067c CF93      		push r28
+ 1462 067e DF93      		push r29
+ 1463 0680 CDB7      		in r28,__SP_L__
+ 1464 0682 DEB7      		in r29,__SP_H__
+ 1465 0684 2897      		sbiw r28,8
+ 1466 0686 0FB6      		in __tmp_reg__,__SREG__
+ 1467 0688 F894      		cli
+ 1468 068a DEBF      		out __SP_H__,r29
+ 1469 068c 0FBE      		out __SREG__,__tmp_reg__
+ 1470 068e CDBF      		out __SP_L__,r28
+ 1471               	/* prologue: function */
+ 1472               	/* frame size = 8 */
+ 1473               	/* stack size = 12 */
+ 1474               	.L__stack_usage = 12
+ 1475 0690 FC01      		movw r30,r24
+ 389:messages.c    **** 
+ 390:messages.c    **** 	static uint16_t release_time = 200;
+ 391:messages.c    **** 	uint16_t tmp = 0;
+ 392:messages.c    **** 	uint8_t i;
+ 393:messages.c    **** 	char str[8];
+ 394:messages.c    **** 
+ 395:messages.c    **** 	// set the power of a shot
+ 396:messages.c    **** 	// full power is round about 3000
+ 397:messages.c    **** 	// a slow pass is about 800
+ 398:messages.c    **** 	if (data[0] == 's') {
+ 1477               	.LM150:
+ 1478 0692 9081      		ld r25,Z
+ 1479 0694 9337      		cpi r25,lo8(115)
+ 1480 0696 01F4      		brne .L83
+ 1481 0698 3196      		adiw r30,1
+ 1482 069a 81E0      		ldi r24,lo8(1)
+ 1483 069c 20E0      		ldi r18,0
+ 1484 069e 30E0      		ldi r19,0
+ 1485               	.LBB23:
+ 1486               	.LBB24:
+ 1487               	.LBB25:
+ 399:messages.c    **** 		for (i = 1; i < length; i++) {
+ 400:messages.c    **** 			if (data[i] >= 0x30 && data[i] <= 0x39) {
+ 401:messages.c    **** 				tmp = tmp * 10 + (data[i] - 0x30);
+ 1489               	.LM151:
+ 1490 06a0 7AE0      		ldi r23,lo8(10)
+ 1491               	.L84:
+ 399:messages.c    **** 		for (i = 1; i < length; i++) {
+ 1493               	.LM152:
+ 1494 06a2 8617      		cp r24,r22
+ 1495 06a4 00F4      		brsh .L101
+ 400:messages.c    **** 				tmp = tmp * 10 + (data[i] - 0x30);
+ 1497               	.LM153:
+ 1498 06a6 9191      		ld r25,Z+
+ 1499 06a8 40ED      		ldi r20,lo8(-48)
+ 1500 06aa 490F      		add r20,r25
+ 1501 06ac 4A30      		cpi r20,lo8(10)
+ 1502 06ae 00F4      		brsh .L85
+ 1504               	.LM154:
+ 1505 06b0 729F      		mul r23,r18
+ 1506 06b2 A001      		movw r20,r0
+ 1507 06b4 739F      		mul r23,r19
+ 1508 06b6 500D      		add r21,r0
+ 1509 06b8 1124      		clr __zero_reg__
+ 1510 06ba 9A01      		movw r18,r20
+ 1511 06bc 2053      		subi r18,48
+ 1512 06be 3109      		sbc r19,__zero_reg__
+ 1513 06c0 290F      		add r18,r25
+ 1514 06c2 311D      		adc r19,__zero_reg__
+ 402:messages.c    **** 				if (tmp > 9999) {//254) {
+ 1516               	.LM155:
+ 1517 06c4 2031      		cpi r18,16
+ 1518 06c6 97E2      		ldi r25,39
+ 1519 06c8 3907      		cpc r19,r25
+ 1520 06ca 00F0      		brlo .L86
+ 403:messages.c    **** 					error("ERR DATE");
+ 1522               	.LM156:
+ 1523 06cc 80E0      		ldi r24,lo8(.LC4)
+ 1524 06ce 90E0      		ldi r25,hi8(.LC4)
+ 1525 06d0 00C0      		rjmp .L99
+ 1526               	.L85:
+ 404:messages.c    **** 					return;
+ 405:messages.c    **** 				}
+ 406:messages.c    **** 			}
+ 407:messages.c    **** 			else {
+ 408:messages.c    **** 				error("ERR NAN");
+ 1528               	.LM157:
+ 1529 06d2 80E0      		ldi r24,lo8(.LC5)
+ 1530 06d4 90E0      		ldi r25,hi8(.LC5)
+ 1531 06d6 00C0      		rjmp .L99
+ 1532               	.L86:
+ 399:messages.c    **** 			if (data[i] >= 0x30 && data[i] <= 0x39) {
+ 1534               	.LM158:
+ 1535 06d8 8F5F      		subi r24,lo8(-(1))
+ 1536 06da 00C0      		rjmp .L84
+ 1537               	.L101:
+ 409:messages.c    **** 				return;
+ 410:messages.c    **** 			}
+ 411:messages.c    **** 		}
+ 412:messages.c    **** 		release_time = tmp;
+ 1539               	.LM159:
+ 1540 06dc 3093 0000 		sts release_time.1766+1,r19
+ 1541 06e0 2093 0000 		sts release_time.1766,r18
+ 413:messages.c    **** 		sprintf(str, "nt%d\n", tmp);
+ 1543               	.LM160:
+ 1544 06e4 3F93      		push r19
+ 1545 06e6 2F93      		push r18
+ 1546 06e8 80E0      		ldi r24,lo8(.LC6)
+ 1547 06ea 90E0      		ldi r25,hi8(.LC6)
+ 1548 06ec 9F93      		push r25
+ 1549 06ee 8F93      		push r24
+ 1550 06f0 8E01      		movw r16,r28
+ 1551 06f2 0F5F      		subi r16,-1
+ 1552 06f4 1F4F      		sbci r17,-1
+ 1553 06f6 1F93      		push r17
+ 1554 06f8 0F93      		push r16
+ 1555 06fa 0E94 0000 		call sprintf
+ 414:messages.c    **** 		debug(str);
+ 1557               	.LM161:
+ 1558 06fe C801      		movw r24,r16
+ 1559 0700 0E94 0000 		call debug
+ 1560 0704 0F90      		pop __tmp_reg__
+ 1561 0706 0F90      		pop __tmp_reg__
+ 1562 0708 0F90      		pop __tmp_reg__
+ 1563 070a 0F90      		pop __tmp_reg__
+ 1564 070c 0F90      		pop __tmp_reg__
+ 1565 070e 0F90      		pop __tmp_reg__
+ 1566 0710 00C0      		rjmp .L82
+ 1567               	.L83:
+ 1568               	.LBE25:
+ 1569               	.LBE24:
+ 1570               	.LBE23:
+ 415:messages.c    **** 	}
+ 416:messages.c    **** 	// SPACE release the kicker
+ 417:messages.c    **** 	else if (data[0] == ' ') {
+ 1572               	.LM162:
+ 1573 0712 9032      		cpi r25,lo8(32)
+ 1574 0714 01F4      		brne .L90
+ 418:messages.c    **** 		if (release_time > 0)
+ 1576               	.LM163:
+ 1577 0716 8091 0000 		lds r24,release_time.1766
+ 1578 071a 9091 0000 		lds r25,release_time.1766+1
+ 1579 071e 0097      		sbiw r24,0
+ 1580 0720 01F0      		breq .L91
+ 1581               	.LBB26:
+ 419:messages.c    **** 			kicker_addKickJob(release_time);
+ 1583               	.LM164:
+ 1584 0722 0E94 0000 		call kicker_addKickJob
+ 1585               	.L91:
+ 1586               	.LBE26:
+ 420:messages.c    **** 		debug("Release");
+ 1588               	.LM165:
+ 1589 0726 80E0      		ldi r24,lo8(.LC7)
+ 1590 0728 90E0      		ldi r25,hi8(.LC7)
+ 1591 072a 0E94 0000 		call debug
+ 1592 072e 00C0      		rjmp .L82
+ 1593               	.L90:
+ 421:messages.c    **** 	}
+ 422:messages.c    **** 	// enable auto boosting
+ 423:messages.c    **** 	else if (data[0] == 'e') {
+ 1595               	.LM166:
+ 1596 0730 9536      		cpi r25,lo8(101)
+ 1597 0732 01F4      		brne .L92
+ 424:messages.c    **** 		mode = Mode_SoftwareControlled;
+ 1599               	.LM167:
+ 1600 0734 81E0      		ldi r24,lo8(1)
+ 1601 0736 00C0      		rjmp .L100
+ 1602               	.L92:
+ 425:messages.c    **** 	}
+ 426:messages.c    **** 	// force boosting. disable the software control
+ 427:messages.c    **** 	// warning this may overload the capacitors if the
+ 428:messages.c    **** 	// hardware disabling function fails
+ 429:messages.c    **** 	else if (data[0] == 'w') {
+ 1604               	.LM168:
+ 1605 0738 9737      		cpi r25,lo8(119)
+ 1606 073a 01F4      		brne .L93
+ 430:messages.c    **** 		mode = Mode_Automatic;
+ 1608               	.LM169:
+ 1609 073c 1092 0000 		sts mode,__zero_reg__
+ 1610 0740 00C0      		rjmp .L82
+ 1611               	.L93:
+ 431:messages.c    **** 	}
+ 432:messages.c    **** 	// disable charging but holds the power
+ 433:messages.c    **** 	else if (data[0] == 'q') {
+ 1613               	.LM170:
+ 1614 0742 9137      		cpi r25,lo8(113)
+ 1615 0744 01F4      		brne .L94
+ 434:messages.c    **** 		mode = Mode_Stop;
+ 1617               	.LM171:
+ 1618 0746 84E0      		ldi r24,lo8(4)
+ 1619               	.L100:
+ 1620 0748 8093 0000 		sts mode,r24
+ 1621 074c 00C0      		rjmp .L82
+ 1622               	.L94:
+ 435:messages.c    **** 	}
+ 436:messages.c    **** 	// switch back to AUTOMATIC MODE
+ 437:messages.c    **** 	// (without the driver the rekick driver
+ 438:messages.c    **** 	// (the one in c#), the system goes into standby mode)
+ 439:messages.c    **** 	else if (data[0] == 'a') {
+ 1624               	.LM172:
+ 1625 074e 9136      		cpi r25,lo8(97)
+ 1626 0750 01F4      		brne .L95
+ 440:messages.c    **** 		mode = Mode_Automatic;
+ 1628               	.LM173:
+ 1629 0752 1092 0000 		sts mode,__zero_reg__
+ 441:messages.c    **** 		parse_data = parse_default;
+ 1631               	.LM174:
+ 1632 0756 80E0      		ldi r24,lo8(gs(parse_default))
+ 1633 0758 90E0      		ldi r25,hi8(gs(parse_default))
+ 1634 075a 9093 0000 		sts parse_data+1,r25
+ 1635 075e 8093 0000 		sts parse_data,r24
+ 1636 0762 00C0      		rjmp .L82
+ 1637               	.L95:
+ 442:messages.c    **** 	}
+ 443:messages.c    **** 	else {
+ 444:messages.c    **** 		error("ERR IMPL");
+ 1639               	.LM175:
+ 1640 0764 80E0      		ldi r24,lo8(.LC8)
+ 1641 0766 90E0      		ldi r25,hi8(.LC8)
+ 1642               	.L99:
+ 1643 0768 0E94 0000 		call error
+ 1644               	.L82:
+ 1645               	/* epilogue start */
+ 445:messages.c    **** 	}
+ 446:messages.c    **** 
+ 447:messages.c    **** 	return;
+ 448:messages.c    **** }
+ 1647               	.LM176:
+ 1648 076c 2896      		adiw r28,8
+ 1649 076e 0FB6      		in __tmp_reg__,__SREG__
+ 1650 0770 F894      		cli
+ 1651 0772 DEBF      		out __SP_H__,r29
+ 1652 0774 0FBE      		out __SREG__,__tmp_reg__
+ 1653 0776 CDBF      		out __SP_L__,r28
+ 1654 0778 DF91      		pop r29
+ 1655 077a CF91      		pop r28
+ 1656 077c 1F91      		pop r17
+ 1657 077e 0F91      		pop r16
+ 1658 0780 0895      		ret
+ 1668               	.Lscope14:
+ 1669               		.data
+ 1672               	release_time.1766:
+ 1673 0000 C800      		.word	200
+ 1674               	.global	parse_data
+ 1677               	parse_data:
+ 1678 0002 0000      		.word	gs(parse_default)
+ 1679               	.global	can_buffer_tail
+ 1680               		.section .bss
+ 1683               	can_buffer_tail:
+ 1684 0000 00        		.zero	1
+ 1685               	.global	can_buffer_head
+ 1688               	can_buffer_head:
+ 1689 0001 00        		.zero	1
+ 1690               		.comm	rx_msg,12,1
+ 1691               		.comm	tx_msg,12,1
+ 1692               		.comm	rx_buffer,8,1
+ 1693               		.comm	tx_buffer,8,1
+ 1694               		.comm	can_buffer,260,1
+ 1703               		.text
+ 1705               	.Letext0:
+ 1706               		.ident	"GCC: (GNU) 4.9.2"
+ 1707               	.global __do_copy_data
+ 1708               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 messages.c
+     /tmp/cctKMUBk.s:2      *ABS*:000000000000003e __SP_H__
+     /tmp/cctKMUBk.s:3      *ABS*:000000000000003d __SP_L__
+     /tmp/cctKMUBk.s:4      *ABS*:000000000000003f __SREG__
+     /tmp/cctKMUBk.s:5      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/cctKMUBk.s:6      *ABS*:0000000000000001 __zero_reg__
+     /tmp/cctKMUBk.s:129    .text:0000000000000000 generate_extCAN_ID
+     /tmp/cctKMUBk.s:220    .text:0000000000000086 configureRxMOb
+                            *COM*:0000000000000008 rx_buffer
+                            *COM*:000000000000000c rx_msg
+     /tmp/cctKMUBk.s:278    .text:00000000000000c8 communication_init
+                            *COM*:000000000000000c tx_msg
+                            *COM*:0000000000000008 tx_buffer
+     /tmp/cctKMUBk.s:333    .text:00000000000000f8 message_receive_handler
+     /tmp/cctKMUBk.s:1677   .data:0000000000000002 parse_data
+     /tmp/cctKMUBk.s:395    .text:0000000000000146 sendMsg
+     /tmp/cctKMUBk.s:469    .text:00000000000001ac message_transmit_handler
+     /tmp/cctKMUBk.s:1683   .bss:0000000000000000 can_buffer_tail
+     /tmp/cctKMUBk.s:1688   .bss:0000000000000001 can_buffer_head
+                            *COM*:0000000000000104 can_buffer
+     /tmp/cctKMUBk.s:534    .text:00000000000001fa message_handler
+     /tmp/cctKMUBk.s:557    .text:0000000000000202 prepareMsg
+     /tmp/cctKMUBk.s:689    .text:00000000000002b8 split_message
+     /tmp/cctKMUBk.s:786    .text:0000000000000324 debug
+     /tmp/cctKMUBk.s:909    .text:00000000000003c8 warning
+     /tmp/cctKMUBk.s:1032   .text:000000000000046c error
+     /tmp/cctKMUBk.s:1171   .text:0000000000000510 parse_default
+     /tmp/cctKMUBk.s:1455   .text:0000000000000678 parse_manual
+     /tmp/cctKMUBk.s:1672   .data:0000000000000000 release_time.1766
+
+UNDEFINED SYMBOLS
+can_cmd
+can_init
+can_get_status
+memcpy
+last_heartbeat
+timer_get_ms
+mode
+kicker_addKickJob
+kicker_addKickJobForced
+booster_setMaxVoltage
+sprintf
+booster_sendInfo
+__do_copy_data
+__do_clear_bss
