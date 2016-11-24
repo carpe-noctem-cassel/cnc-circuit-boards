@@ -19841,7 +19841,7 @@ Source: 153385-da-01-en-Optocoupler_ILD205-T.pdf</description>
 <part name="Q3" library="transistor-power" deviceset="IRF9530" device=""/>
 <part name="Q4" library="transistor-power" deviceset="IRF9530" device=""/>
 <part name="Q5" library="transistor-power" deviceset="IRF9530" device=""/>
-<part name="R12" library="rcl" deviceset="R-EU_" device="R0805" value="0.001"/>
+<part name="R12" library="rcl" deviceset="R-EU_" device="R2512" value="0.002"/>
 <part name="IC1" library="linear" deviceset="*1458" device="D" technology="LM"/>
 <part name="VR1" library="1_USER" deviceset="TL431" device="_SOT23"/>
 <part name="VR2" library="1_USER" deviceset="TL431" device="_SOT23"/>
@@ -20634,6 +20634,7 @@ Source: 153385-da-01-en-Optocoupler_ILD205-T.pdf</description>
 <pinref part="R12" gate="G$1" pin="2"/>
 <wire x1="22.86" y1="20.32" x2="25.4" y2="20.32" width="0.1524" layer="91"/>
 <pinref part="P1" gate="-2" pin="P"/>
+<label x="38.1" y="20.32" size="1.778" layer="95"/>
 </segment>
 </net>
 </nets>
