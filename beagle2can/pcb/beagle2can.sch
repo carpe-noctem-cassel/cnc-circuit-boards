@@ -15996,6 +15996,10 @@ Low profile connectors, straight&lt;p&gt;
 <wire x1="208.28" y1="38.1" x2="215.9" y2="38.1" width="0.1524" layer="91"/>
 <wire x1="215.9" y1="38.1" x2="215.9" y2="35.56" width="0.1524" layer="91"/>
 <pinref part="GND7" gate="1" pin="GND"/>
+<pinref part="U$1" gate="G$1" pin="GNDA_ADC"/>
+<wire x1="208.28" y1="50.8" x2="215.9" y2="50.8" width="0.1524" layer="91"/>
+<wire x1="215.9" y1="50.8" x2="215.9" y2="38.1" width="0.1524" layer="91"/>
+<junction x="215.9" y="38.1"/>
 </segment>
 <segment>
 <pinref part="U$1" gate="G$1" pin="GND@1"/>
