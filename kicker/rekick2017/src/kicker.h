@@ -14,7 +14,7 @@
 
 #define FORCED_VOLTAGE_RANGE	10		// allow a variance from a forced voltage (in Volt)
 #define KICK_TASK_EXPIRE		2000	// time in which the kick task expires
-#define TIME_BETWEEN_TWO_SHOTS	200		// in ms
+#define TIME_BETWEEN_TWO_SHOTS	500		// in ms
 #define MAX_KICK_TIME			50		// in ms
 
 void kicker_init();

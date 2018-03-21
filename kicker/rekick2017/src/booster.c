@@ -39,7 +39,7 @@ enum eState {
  * 5 bytes long
  */
 struct BOOSTER_INFO {
-	enum eState state;					//< the state of the booster
+	enum eState state;				//< the state of the booster
 	uint16_t supply_voltage;		//< the adc value of the supply voltage (Volt)
 	uint16_t capacitors_voltage;	//< the adc voltage of the capacitors (Volt)
 };

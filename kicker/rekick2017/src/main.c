@@ -46,9 +46,9 @@ auto can0
 
 #include "defaults.h"
 #include "global.h"
-//#include "messages.h"
+#include "messages.h"
 
-//#include "booster.h"
+#include "booster.h"
 
 
 //TESTS
@@ -83,6 +83,7 @@ int main(void) {
 	// KICKER
 
 	while(1) {
+		debug("ich lebe");
 		message_handler();
 		//adc_handler();
 		kicker_ctrl();
