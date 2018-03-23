@@ -82,10 +82,14 @@ int main(void) {
 	// BOOSTER
 	// KICKER
 
+	for(uint8_t i = 0; i<=100; i++) {
+		_delay_us(10);
+	}
+	booster_reset();
+
 	while(1) {
-		debug("ich lebe");
 		message_handler();
-		//adc_handler();
+		adc_handler();
 		kicker_ctrl();
 		booster_ctrl();
 

@@ -433,6 +433,10 @@ void parse_manual(uint8_t *data, uint8_t length) {
 	else if (data[0] == 'q') {
 		mode = Mode_Stop;
 	}
+	// reset NOTAUS
+	else if (data[0] == 'r') {
+		booster_reset();
+	}
 	// switch back to AUTOMATIC MODE
 	// (without the driver the rekick driver
 	// (the one in c#), the system goes into standby mode)

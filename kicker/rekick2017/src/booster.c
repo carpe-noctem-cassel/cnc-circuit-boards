@@ -85,7 +85,7 @@ void booster_reset()
 
 
 	SET(RESET_NOTAUS);
-	_delay_ms(1);
+	_delay_ms(1000);
 	RESET(RESET_NOTAUS);
 }
 

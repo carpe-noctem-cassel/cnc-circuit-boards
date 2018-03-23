@@ -47,6 +47,10 @@ int8_t adc_start_conversion(int8_t channel)
 		return -1;
 	}
 
+	char str1[20];
+	sprintf(str1, "ADC, Mux: %d", channel);
+	debug(str1);
+
 	ADMUX = (ADMUX & 0xC0) | (channel & 0x0F);
 
 	// Start Conversion
