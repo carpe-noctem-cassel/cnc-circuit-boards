@@ -1,7 +1,7 @@
 
 # MCU name
-MCU = atmega16m1
-AVRDUDE_MCU = m16M1
+MCU = atmega32m1
+AVRDUDE_MCU = m32m1
 
 
 # Processor frequency.
@@ -174,11 +174,11 @@ LDFLAGS += $(PRINTF_LIB) $(SCANF_LIB) $(MATH_LIB)
 #
 # AVRDUDE_PROGRAMMER = stk500v2
 # AVRDUDE_PROGRAMMER = avrispv2
-AVRDUDE_PROGRAMMER = usbasp
+AVRDUDE_PROGRAMMER = usbasp-clone
 
 # com1 = serial port. Use lpt1 to connect to parallel port.
-AVRDUDE_PORT = /dev/parport0    # programmer connected to serial device
-#AVRDUDE_PORT = usb    # programmer connected to serial device
+#AVRDUDE_PORT = /dev/parport0    # programmer connected to serial device
+AVRDUDE_PORT = usbc    # programmer connected to serial device
 #AVRDUDE_PORT = /dev/ttyUSB0    # programmer connected to serial device
 
 AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
