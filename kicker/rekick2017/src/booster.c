@@ -226,7 +226,7 @@ uint16_t booster_getBoosterVoltage()
 uint16_t booster_getCapacitorVoltage()
 {
 	// factor = ADC-Ref-Voltage * Voltage-Divider / ADC-Resolution
-	static double factor = 0.328664; // 5.0 * 12587/187 / 1024;
+	static double factor = 0.33508049;		// 5.0 * Spannungsteiler (2fach) / 1024		// 0.328664 = 5.0 * 12587/187 / 1024;
 
 	double ret = adc_capacitor_raw * factor;
 
