@@ -56,19 +56,21 @@ uint32_t last_heartbeat = 0;
 
 void booster_init()
 {
-	SET_OUTPUT(RESET_NOTAUS);
-	RESET(RESET_NOTAUS);
-	SET_INPUT(NOTAUS);
-	RESET(NOTAUS);
-
 	SET_OUTPUT(ACTIVATE_BOOSTER);
 	RESET(ACTIVATE_BOOSTER);
 	SET_OUTPUT(CHARGE);
 	RESET(CHARGE);
-	SET_INPUT(FAULT);
-	RESET(FAULT);
+	SET_OUTPUT(RESET_NOTAUS);
+	RESET(RESET_NOTAUS);
+	SET_OUTPUT(TRIGGER_NOTAUS);
+	RESET(TRIGGER_NOTAUS);
+	
 	SET_INPUT(DONE);
 	RESET(DONE);
+	SET_INPUT(FAULT);
+	RESET(FAULT);
+	SET_INPUT(NOTAUS);
+	RESET(NOTAUS);
 
 	booster_reset();
 	mode = Mode_Automatic;
@@ -77,6 +79,7 @@ void booster_init()
 void booster_reset()
 {
 	RESET(NOTAUS);
+	RESET(TRIGGER_NOTAUS);
 	RESET(ACTIVATE_BOOSTER);
 	RESET(CHARGE);
 	RESET(FAULT);
@@ -123,7 +126,9 @@ enum eState booster_getState()
 		if(boosterVoltage < 18 || logicVoltage > 29)
 			return State_VoltageLowBooster;
 
-		return State_VoltageLow;
+		// TODO irgendwie komisch :D
+		// Fault Pin bleibt gesetzt, trotz Fehlerfreiem zustand
+		// return State_VoltageLow;
 	}
 
 	if(active != charge) // Should be the same. Otherwise emergency shutdown is triggered
@@ -155,16 +160,19 @@ int8_t booster_activate()
 		case State_Activated:
 		case State_ActivatedHold:
 			SET(ACTIVATE_BOOSTER);
+			SET(CHARGE);
 			return 1;
 			break;
 
 		case State_Deactivated:
 			SET(ACTIVATE_BOOSTER);
+			SET(CHARGE);
 			return 1;
 			break;
 
 		case State_ActivatedKicking:
 			RESET(ACTIVATE_BOOSTER);
+			RESET(CHARGE);
 			return 0;
 			break;
 
@@ -181,6 +189,7 @@ int8_t booster_activate()
 void booster_deactivate()
 {
 	RESET(ACTIVATE_BOOSTER);
+	RESET(CHARGE);
 	RESET(KICK);
 }
 
@@ -290,7 +299,7 @@ void booster_ctrl()
 {
 	uint32_t time_now;
 	timer_get_ms(&time_now);
-	char message[30];
+	char message[30] = "leer";
 
 	enum eState state = booster_getState();
 	static enum eState state_old;
@@ -300,10 +309,12 @@ void booster_ctrl()
 	switch(state)
 	{
 		case State_Deactivated:
+			sprintf(message, "Dea: 0x%02X", state);
 			break;
 
 		case State_Activated:
 		case State_ActivatedHold:
+			sprintf(message, "Act: 0x%02X", state);
 			if (time_now - last_heartbeat < PING_TIMEOUT || mode == Mode_Manual) {
 				uint16_t capacitor_voltage = booster_getCapacitorVoltage();
 				if (booster_getCapacitorVoltage() > MAX_VOLTAGE + 15) {
