@@ -427,10 +427,12 @@ void parse_manual(uint8_t *data, uint8_t length) {
 	// warning this may overload the capacitors if the
 	// hardware disabling function fails
 	else if (data[0] == 'w') {
-		mode = Mode_Automatic;
+		booster_activate();
+		//mode = Mode_Automatic;
 	}
 	// disable charging but holds the power
 	else if (data[0] == 'q') {
+		booster_deactivate();
 		mode = Mode_Stop;
 	}
 	// reset NOTAUS
