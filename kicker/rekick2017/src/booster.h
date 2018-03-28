@@ -12,7 +12,9 @@
 
 #include <avr/io.h>
 
-#define MAX_VOLTAGE					330		// Only change this value, if you have changed Hardware
+#define DESIRED_VOLTAGE				330		// Aimed Output Voltage, DESIRED_VOLTGE + DELTA < MAX_VOLTAGE
+#define MAX_VOLTAGE					340		// Only change this value, if you have changed Hardware
+#define DELTA_OUTPUT_VOLTAGE		2		// Software regulation around DESIRED_VOLTAGE +- DELTA
 #define PING_TIMEOUT				1000	// ms
 
 enum eMode {
@@ -37,6 +39,7 @@ void booster_reset();
 enum eState booster_getState();
 int8_t booster_activate();
 void booster_deactivate();
+void booster_stagnate();
 uint16_t booster_getLogicVoltage();
 uint16_t booster_getBoosterVoltage();
 uint16_t booster_getCapacitorVoltage();

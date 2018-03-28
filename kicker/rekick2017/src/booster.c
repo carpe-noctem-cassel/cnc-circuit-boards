@@ -50,7 +50,6 @@ volatile uint16_t adc_booster_raw = 0;
 volatile uint16_t adc_capacitor_raw = 0;
 
 enum eMode mode;
-uint16_t desired_voltage = 330.0;
 uint32_t last_heartbeat = 0;
 
 
@@ -131,8 +130,8 @@ enum eState booster_getState()
 		// return State_VoltageLow;
 	}
 
-	if(active != charge) // Should be the same. Otherwise emergency shutdown is triggered
-		return State_EmergencyTriggered;
+	if(active != charge)
+		return State_ActivatedHold;
 
 	if(!active & !kick) {
 		if (mode == Mode_SoftwareControlledHold)
@@ -191,6 +190,11 @@ void booster_deactivate()
 	RESET(ACTIVATE_BOOSTER);
 	RESET(CHARGE);
 	RESET(KICK);
+}
+
+void booster_stagnate()
+{
+	RESET(CHARGE);
 }
 
 uint8_t booster_canKick() {
@@ -317,21 +321,18 @@ void booster_ctrl()
 			sprintf(message, "Act: 0x%02X", state);
 			if (time_now - last_heartbeat < PING_TIMEOUT || mode == Mode_Manual) {
 				uint16_t capacitor_voltage = booster_getCapacitorVoltage();
-				if (booster_getCapacitorVoltage() > MAX_VOLTAGE + 15) {
+				if (booster_getCapacitorVoltage() > MAX_VOLTAGE) {
 					errorFlag = true;
 					sprintf(message, "Overvoltage. Software detected.");
 					booster_deactivate();
 					mode = Mode_ErrorCap;
 				}
 
-				if (mode == Mode_SoftwareControlled || mode == Mode_SoftwareControlledHold) {
-					if (capacitor_voltage >= desired_voltage + 0.5)
-						booster_deactivate();
-					else if (capacitor_voltage <= desired_voltage - 0.5)
-						booster_activate();
-				} else {
+				// Software Regulation
+				if (capacitor_voltage >= DESIRED_VOLTAGE + DELTA_OUTPUT_VOLTAGE)
+					booster_hold();
+				else if (capacitor_voltage <= DESIRED_VOLTAGE - DELTA_OUTPUT_VOLTAGE)
 					booster_activate();
-				}
 			} else {
 				booster_deactivate();
 			}
