@@ -50,6 +50,7 @@ volatile uint16_t adc_booster_raw = 0;
 volatile uint16_t adc_capacitor_raw = 0;
 
 enum eMode mode;
+uint32_t desired_voltage = 0;
 uint32_t last_heartbeat = 0;
 
 
@@ -73,6 +74,8 @@ void booster_init()
 
 	booster_reset();
 	mode = Mode_Automatic;
+	
+	booster_setMaxVoltage(DESIRED_VOLTAGE);
 }
 
 void booster_reset()
@@ -240,8 +243,9 @@ uint16_t booster_getCapacitorVoltage()
 {
 	// factor = ADC-Ref-Voltage * Voltage-Divider / ADC-Resolution
 	static double factor = 0.33508049;		// 5.0 * Spannungsteiler (2fach) / 1024		// 0.328664 = 5.0 * 12587/187 / 1024;
+	static double offset = 3.0;
 
-	double ret = adc_capacitor_raw * factor;
+	double ret = adc_capacitor_raw * factor + offset;
 
 	return (uint16_t) ret; // * factor;
 }
@@ -252,14 +256,14 @@ uint16_t booster_getCapacitorVoltage()
 void booster_printVoltage() {
 	char str1[20];
 	sprintf(str1, "L: %d, %d V", adc_logic_raw, booster_getLogicVoltage());
-	debug(str1);
+//	debug(str1);
 
 	char str2[20];
 	sprintf(str2, "B: %d, %d V", adc_booster_raw, booster_getBoosterVoltage());
-	debug(str2);
+//	debug(str2);
 
 	char str3[20];
-	sprintf(str3, "C: %d, %d V", adc_capacitor_raw, booster_getCapacitorVoltage());
+	sprintf(str3, "C: %dV", booster_getCapacitorVoltage());
 	debug(str3);
 }
 
@@ -290,10 +294,10 @@ void booster_setCapacitorRawVoltage(uint16_t voltage)
 
 void booster_setMaxVoltage(uint16_t voltage)
 {
-	if(voltage > MAX_VOLTAGE)
+	if(voltage + DELTA_OUTPUT_VOLTAGE > MAX_VOLTAGE)
 	{
 		error("Voltage to high");
-		voltage = MAX_VOLTAGE;
+		voltage = 0;
 	}
 
 	desired_voltage = voltage;
@@ -329,9 +333,9 @@ void booster_ctrl()
 				}
 
 				// Software Regulation
-				if (capacitor_voltage >= DESIRED_VOLTAGE + DELTA_OUTPUT_VOLTAGE)
-					booster_hold();
-				else if (capacitor_voltage <= DESIRED_VOLTAGE - DELTA_OUTPUT_VOLTAGE)
+				if (capacitor_voltage >= desired_voltage + DELTA_OUTPUT_VOLTAGE)
+					booster_stagnate();
+				else if (capacitor_voltage <= desired_voltage - DELTA_OUTPUT_VOLTAGE)
 					booster_activate();
 			} else {
 				booster_deactivate();

@@ -12,7 +12,7 @@
 
 #include <avr/io.h>
 
-#define DESIRED_VOLTAGE				330		// Aimed Output Voltage, DESIRED_VOLTGE + DELTA < MAX_VOLTAGE
+#define DESIRED_VOLTAGE				250		// Aimed Output Voltage, DESIRED_VOLTGE + DELTA < MAX_VOLTAGE
 #define MAX_VOLTAGE					340		// Only change this value, if you have changed Hardware
 #define DELTA_OUTPUT_VOLTAGE		2		// Software regulation around DESIRED_VOLTAGE +- DELTA
 #define PING_TIMEOUT				1000	// ms
