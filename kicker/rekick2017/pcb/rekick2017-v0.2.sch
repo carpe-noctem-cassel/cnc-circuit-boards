@@ -14487,13 +14487,6 @@ In this library the device names are the same as the pin names of the symbols, t
 <text x="-1.143" y="-2.032" size="1.778" layer="96">&gt;VALUE</text>
 <pin name="0V" x="0" y="2.54" visible="off" length="short" direction="sup" rot="R270"/>
 </symbol>
-<symbol name="+12V">
-<wire x1="0" y1="1.905" x2="0" y2="0.635" width="0.1524" layer="94"/>
-<wire x1="-0.635" y1="1.27" x2="0.635" y2="1.27" width="0.1524" layer="94"/>
-<circle x="0" y="1.27" radius="1.27" width="0.254" layer="94"/>
-<text x="-2.54" y="3.175" size="1.778" layer="96">&gt;VALUE</text>
-<pin name="+12V" x="0" y="-2.54" visible="off" length="short" direction="sup" rot="R90"/>
-</symbol>
 <symbol name="+05V/3">
 <wire x1="0" y1="1.905" x2="0" y2="0.635" width="0.1524" layer="94"/>
 <wire x1="-0.635" y1="1.27" x2="0.635" y2="1.27" width="0.1524" layer="94"/>
@@ -14527,19 +14520,6 @@ In this library the device names are the same as the pin names of the symbols, t
 <description>&lt;b&gt;SUPPLY SYMBOL&lt;/b&gt;</description>
 <gates>
 <gate name="0V" symbol="0V" x="0" y="0"/>
-</gates>
-<devices>
-<device name="">
-<technologies>
-<technology name=""/>
-</technologies>
-</device>
-</devices>
-</deviceset>
-<deviceset name="+12V" prefix="SUPPLY">
-<description>&lt;b&gt;SUPPLY SYMBOL&lt;/b&gt;</description>
-<gates>
-<gate name="+12V" symbol="+12V" x="0" y="0"/>
 </gates>
 <devices>
 <device name="">
@@ -25149,7 +25129,6 @@ R-78xx-0.5 Series</description>
 <part name="P+9" library="supply1" deviceset="+24V" device=""/>
 <part name="GND8" library="supply1" deviceset="GND" device=""/>
 <part name="SUPPLY2" library="supply2" deviceset="0V" device="" value="CAP_0V"/>
-<part name="SUPPLY5" library="supply2" deviceset="+12V" device="" value="CAP_+12V"/>
 <part name="SUPPLY9" library="supply2" deviceset="0V" device="" value="CAP_0V"/>
 <part name="D9" library="diode" deviceset="BYT08P" device="" value="STTH810D"/>
 <part name="C25" library="rcl" deviceset="CPOL-EU" device="E5-10.5" value="10µ/450V"/>
@@ -25158,14 +25137,12 @@ R-78xx-0.5 Series</description>
 <part name="P+11" library="supply1" deviceset="+5V" device=""/>
 <part name="R14" library="rcl" deviceset="R-EU_" device="R0805" value="390"/>
 <part name="FRAME7" library="frames" deviceset="A4L-LOC" device=""/>
-<part name="SUPPLY12" library="supply2" deviceset="+12V" device="" value="CAP_+12V"/>
 <part name="SUPPLY15" library="supply2" deviceset="0V" device="" value="CAP_0V"/>
 <part name="GND25" library="supply1" deviceset="GND" device=""/>
 <part name="P+21" library="supply1" deviceset="+5V" device=""/>
 <part name="R17" library="rcl" deviceset="R-EU_" device="R0805" value="390"/>
 <part name="U$5" library="Si8261" deviceset="SI8261ABC" device=""/>
 <part name="U$6" library="Si8261" deviceset="SI8261ABC" device=""/>
-<part name="SUPPLY16" library="supply2" deviceset="+12V" device="" value="CAP_+12V"/>
 <part name="SUPPLY17" library="supply2" deviceset="0V" device="" value="CAP_0V"/>
 <part name="R15" library="rcl" deviceset="R-EU_" device="R0805" value="5.6k"/>
 <part name="R18" library="rcl" deviceset="R-EU_" device="R0805" value="4.7"/>
@@ -25297,7 +25274,6 @@ R-78xx-0.5 Series</description>
 <part name="C16" library="rcl" deviceset="C-EU" device="C0603" value="1µ/16V"/>
 <part name="SUPPLY11" library="supply2" deviceset="0V" device="" value="CAP_0V"/>
 <part name="GND20" library="supply1" deviceset="GND" device=""/>
-<part name="SUPPLY14" library="supply2" deviceset="+12V" device="" value="CAP_+12V"/>
 <part name="P+20" library="supply1" deviceset="+12V" device=""/>
 <part name="C43" library="rcl" deviceset="C-EU" device="C0603" value="100n"/>
 <part name="C44" library="rcl" deviceset="C-EU" device="C0603" value="10p"/>
@@ -25435,7 +25411,6 @@ R-78xx-0.5 Series</description>
 <instance part="P+9" gate="1" x="175.26" y="55.88"/>
 <instance part="GND8" gate="1" x="175.26" y="33.02"/>
 <instance part="SUPPLY2" gate="0V" x="238.76" y="35.56"/>
-<instance part="SUPPLY5" gate="+12V" x="218.44" y="53.34"/>
 <instance part="LED9" gate="G$1" x="238.76" y="48.26"/>
 <instance part="R49" gate="G$1" x="228.6" y="50.8" rot="R180"/>
 <instance part="P1" gate="-1" x="193.04" y="121.92"/>
@@ -25764,10 +25739,9 @@ R-78xx-0.5 Series</description>
 <junction x="218.44" y="40.64"/>
 </segment>
 </net>
-<net name="CAP_+12V" class="0">
+<net name="CAP_12V" class="0">
 <segment>
 <pinref part="U$4" gate="G$1" pin="+U_OUT"/>
-<pinref part="SUPPLY5" gate="+12V" pin="+12V"/>
 <wire x1="210.82" y1="50.8" x2="218.44" y2="50.8" width="0.1524" layer="91"/>
 <junction x="218.44" y="50.8"/>
 <pinref part="R49" gate="G$1" pin="2"/>
@@ -25775,6 +25749,8 @@ R-78xx-0.5 Series</description>
 <junction x="218.44" y="50.8"/>
 <pinref part="C19" gate="G$1" pin="1"/>
 <wire x1="218.44" y1="48.26" x2="218.44" y2="50.8" width="0.1524" layer="91"/>
+<wire x1="218.44" y1="50.8" x2="218.44" y2="53.34" width="0.1524" layer="91"/>
+<label x="218.44" y="53.34" size="1.778" layer="95" rot="R90" xref="yes"/>
 </segment>
 </net>
 <net name="N$76" class="0">
@@ -27041,7 +27017,6 @@ Kick &amp; Servo</description>
 <instance part="P+21" gate="1" x="48.26" y="162.56"/>
 <instance part="R17" gate="G$1" x="48.26" y="152.4" rot="R90"/>
 <instance part="U$6" gate="G$1" x="76.2" y="142.24"/>
-<instance part="SUPPLY16" gate="+12V" x="96.52" y="152.4"/>
 <instance part="SUPPLY17" gate="0V" x="96.52" y="127"/>
 <instance part="R18" gate="G$1" x="119.38" y="139.7"/>
 <instance part="GND27" gate="1" x="55.88" y="127"/>
@@ -27085,9 +27060,8 @@ Kick &amp; Servo</description>
 <wire x1="48.26" y1="157.48" x2="48.26" y2="160.02" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="CAP_+12V" class="0">
+<net name="CAP_12V" class="0">
 <segment>
-<pinref part="SUPPLY16" gate="+12V" pin="+12V"/>
 <wire x1="96.52" y1="147.32" x2="96.52" y2="149.86" width="0.1524" layer="91"/>
 <wire x1="93.98" y1="147.32" x2="96.52" y2="147.32" width="0.1524" layer="91"/>
 <pinref part="U$6" gate="G$1" pin="VDD"/>
@@ -27095,6 +27069,7 @@ Kick &amp; Servo</description>
 <junction x="96.52" y="147.32"/>
 <pinref part="C31" gate="G$1" pin="1"/>
 <wire x1="101.6" y1="142.24" x2="101.6" y2="147.32" width="0.1524" layer="91"/>
+<label x="96.52" y="149.86" size="1.778" layer="95" rot="R90" xref="yes"/>
 </segment>
 </net>
 <net name="CAP_0V" class="0">
@@ -27373,7 +27348,6 @@ Kick &amp; Servo</description>
 <instance part="C16" gate="G$1" x="63.5" y="121.92" rot="R270"/>
 <instance part="SUPPLY11" gate="0V" x="43.18" y="124.46"/>
 <instance part="GND20" gate="1" x="38.1" y="124.46"/>
-<instance part="SUPPLY14" gate="+12V" x="68.58" y="137.16"/>
 <instance part="P+20" gate="1" x="63.5" y="139.7"/>
 <instance part="C43" gate="G$1" x="20.32" y="109.22"/>
 <instance part="C44" gate="G$1" x="109.22" y="106.68"/>
@@ -27474,15 +27448,15 @@ Kick &amp; Servo</description>
 <pinref part="SUPPLY6" gate="0V" pin="0V"/>
 </segment>
 </net>
-<net name="CAP_+12V" class="0">
+<net name="CAP_12V" class="0">
 <segment>
-<pinref part="SUPPLY14" gate="+12V" pin="+12V"/>
 <pinref part="C14" gate="G$1" pin="1"/>
 <wire x1="66.04" y1="129.54" x2="68.58" y2="129.54" width="0.1524" layer="91"/>
 <wire x1="68.58" y1="129.54" x2="71.12" y2="129.54" width="0.1524" layer="91"/>
 <wire x1="68.58" y1="134.62" x2="68.58" y2="129.54" width="0.1524" layer="91"/>
 <junction x="68.58" y="129.54"/>
 <pinref part="U5" gate="A" pin="VDD2"/>
+<label x="68.58" y="134.62" size="1.778" layer="95" rot="R90" xref="yes"/>
 </segment>
 </net>
 <net name="N$14" class="0">
@@ -27636,7 +27610,6 @@ Kick &amp; Servo</description>
 <instance part="C49" gate="G$1" x="246.38" y="43.18"/>
 <instance part="SUPPLY18" gate="G$1" x="33.02" y="104.14" rot="R90"/>
 <instance part="R14" gate="G$1" x="35.56" y="68.58"/>
-<instance part="SUPPLY12" gate="+12V" x="86.36" y="78.74"/>
 <instance part="SUPPLY15" gate="0V" x="86.36" y="53.34"/>
 <instance part="U$5" gate="G$1" x="66.04" y="68.58"/>
 <instance part="R15" gate="G$1" x="104.14" y="66.04"/>
@@ -27944,9 +27917,8 @@ Kick &amp; Servo</description>
 <pinref part="U$5" gate="G$1" pin="ANODE"/>
 </segment>
 </net>
-<net name="CAP_+12V" class="0">
+<net name="CAP_12V" class="0">
 <segment>
-<pinref part="SUPPLY12" gate="+12V" pin="+12V"/>
 <wire x1="86.36" y1="73.66" x2="86.36" y2="76.2" width="0.1524" layer="91"/>
 <pinref part="U$5" gate="G$1" pin="VDD"/>
 <wire x1="83.82" y1="73.66" x2="86.36" y2="73.66" width="0.1524" layer="91"/>
@@ -27954,6 +27926,7 @@ Kick &amp; Servo</description>
 <junction x="86.36" y="73.66"/>
 <pinref part="C30" gate="G$1" pin="1"/>
 <wire x1="91.44" y1="68.58" x2="91.44" y2="73.66" width="0.1524" layer="91"/>
+<label x="86.36" y="76.2" size="1.778" layer="95" rot="R90" xref="yes"/>
 </segment>
 </net>
 <net name="CAP_0V" class="0">
@@ -28153,81 +28126,30 @@ Kick &amp; Servo</description>
 </sheet>
 </sheets>
 <errors>
-<approved hash="102,5,96.52,149.86,+12V,CAP_+12V,,,,"/>
 <approved hash="102,5,96.52,129.54,0V,CAP_0V,,,,"/>
-<approved hash="102,6,243.84,144.78,0V,CAP_0V,,,,"/>
-<approved hash="102,6,228.6,157.48,+12V,CAP_+12V,,,,"/>
-<approved hash="102,6,33.02,40.64,0V,CAP_0V,,,,"/>
-<approved hash="102,6,68.58,38.1,0V,CAP_0V,,,,"/>
 <approved hash="102,6,68.58,93.98,0V,CAP_0V,,,,"/>
-<approved hash="102,6,43.18,71.12,0V,CAP_0V,,,,"/>
-<approved hash="102,6,68.58,78.74,+12V,CAP_+12V,,,,"/>
 <approved hash="102,6,43.18,127,0V,CAP_0V,,,,"/>
-<approved hash="102,6,68.58,134.62,+12V,CAP_+12V,,,,"/>
-<approved hash="201,6,68.58,134.62,+12V,CAP_+12V\, +12V,,,,"/>
-<approved hash="201,6,68.58,78.74,+12V,CAP_+12V\, +12V,,,,"/>
-<approved hash="201,6,228.6,157.48,+12V,CAP_+12V\, +12V,,,,"/>
-<approved hash="102,7,86.36,76.2,+12V,CAP_+12V,,,,"/>
 <approved hash="102,7,86.36,55.88,0V,CAP_0V,,,,"/>
 <approved hash="102,7,124.46,55.88,0V,CAP_0V,,,,"/>
 <approved hash="104,3,33.02,157.48,U$1,VDD,+5V,,,"/>
 <approved hash="104,2,83.82,119.38,U$2,AGND,GND,,,"/>
 <approved hash="104,3,58.42,111.76,U1,VCCA,+3V3,,,"/>
 <approved hash="104,3,58.42,109.22,U1,VCCB,+5V,,,"/>
-<approved hash="104,1,60.96,106.68,U3,VIN,+24V,,,"/>
-<approved hash="202,1,60.96,96.52,U3,ON/~OFF,,,,"/>
-<approved hash="104,1,60.96,55.88,U4,VIN,+24V,,,"/>
-<approved hash="202,1,60.96,45.72,U4,ON/~OFF,,,,"/>
-<approved hash="104,7,55.88,147.32,IC2P,VSS,GND,,,"/>
-<approved hash="104,7,55.88,162.56,IC2P,VDD,+5V,,,"/>
 <approved hash="104,6,71.12,132.08,U5,VDD1,+12V,,,"/>
-<approved hash="104,6,71.12,129.54,U5,VDD2,CAP_+12V,,,"/>
 <approved hash="104,6,71.12,124.46,U5,VREG1,N$50,,,"/>
 <approved hash="104,6,71.12,121.92,U5,VREG2,N$52,,,"/>
 <approved hash="103,6,71.12,109.22,U5,NC,GND,,,"/>
-<approved hash="104,6,71.12,76.2,U6,VDD1,+12V,,,"/>
-<approved hash="104,6,71.12,73.66,U6,VDD2,CAP_+12V,,,"/>
-<approved hash="104,6,71.12,68.58,U6,VREG1,N$68,,,"/>
-<approved hash="104,6,71.12,66.04,U6,VREG2,N$58,,,"/>
-<approved hash="103,6,71.12,53.34,U6,NC,GND,,,"/>
-<approved hash="104,7,50.8,162.56,IC1P,VCC,+5V,,,"/>
-<approved hash="202,7,40.64,116.84,IC4A,-IN,,,,"/>
-<approved hash="202,7,40.64,121.92,IC4A,+IN,,,,"/>
-<approved hash="104,7,60.96,162.56,IC4P,V+,+5V,,,"/>
-<approved hash="104,7,60.96,147.32,IC4P,V-,GND,,,"/>
 <approved hash="106,3,93.98,96.52,CLKOUT_ETH,,,,,"/>
 <approved hash="106,3,93.98,106.68,WOL_ETH,,,,,"/>
-<approved hash="111,1,190.5,144.78,+5V/1,,,,,"/>
-<approved hash="111,1,190.5,144.78,+5V/1,,,,,"/>
 <approved hash="111,3,53.34,109.22,+5V,,,,,"/>
 <approved hash="111,5,101.6,139.7,N$44,,,,,"/>
 <approved hash="111,7,177.8,132.08,GND,,,,,"/>
 <approved hash="111,7,91.44,66.04,N$41,,,,,"/>
-<approved hash="113,1,138.964,89.431,FRAME1,,,,,"/>
-<approved hash="113,2,138.964,89.431,FRAME2,,,,,"/>
-<approved hash="113,3,138.964,89.431,FRAME3,,,,,"/>
-<approved hash="113,4,138.964,89.431,FRAME4,,,,,"/>
 <approved hash="113,3,17.5429,92.5788,JP1,,,,,"/>
 <approved hash="113,3,17.5429,74.7988,JP2,,,,,"/>
 <approved hash="113,2,223.52,148.395,SV1,,,,,"/>
-<approved hash="113,6,138.964,89.431,FRAME5,,,,,"/>
-<approved hash="113,7,138.964,89.431,FRAME6,,,,,"/>
-<approved hash="113,5,138.964,89.431,FRAME7,,,,,"/>
-<approved hash="113,1,204.659,104.14,X1,,,,,"/>
-<approved hash="113,4,16.321,154.94,X2,,,,,"/>
-<approved hash="113,7,114.3,149.471,S1,,,,,"/>
-<approved hash="113,4,66.04,152.792,R23,,,,,"/>
 <approved hash="113,3,89.9245,139.7,SJ1,,,,,"/>
-<approved hash="113,6,213.682,54.61,LED2,,,,,"/>
-<approved hash="113,6,239.082,54.61,LED3,,,,,"/>
 <approved hash="113,5,238.997,163.961,JP3,,,,,"/>
-<approved hash="113,1,104.462,146.05,LED4,,,,,"/>
-<approved hash="113,1,134.942,100.33,LED5,,,,,"/>
-<approved hash="113,1,134.942,49.53,LED6,,,,,"/>
-<approved hash="113,1,223.842,143.51,LED7,,,,,"/>
-<approved hash="113,4,38.4217,166.37,LED8,,,,,"/>
-<approved hash="113,6,244.162,153.67,LED9,,,,,"/>
-<approved hash="113,1,193.362,85.09,LED10,,,,,"/>
 <approved hash="113,5,238.997,125.861,JP4,,,,,"/>
 </errors>
 </schematic>
